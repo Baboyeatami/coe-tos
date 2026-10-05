@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "mode": "proposed-blueprint",
+  "total_points": 100,
+  "metadata": {
+    "program": "BSCE, BSECE, BSCpE",
+    "program_full": "BS Civil Engineering, BS Electronics Engineering, BS Computer Engineering",
+    "course_code": "EMATH 311",
+    "course_title": "Numerical Methods",
+    "academic_year": "A.Y. 2026 – 2027",
+    "semester": " 1st",
+    "assessment": "1st QE",
+    "preparer": "Engr. Jamie Eduardo Rosal, MSCpE"
+  },
+  "assumptions": ["Synthetic proposed assessment; source rubric explicitly includes recall tasks. This does not represent a remapping of an existing exam."],
+  "proposed_changes": ["Before applying this blueprint to an existing exam, revise its tasks and rubric explicitly; a change to classification alone is insufficient."],
+  "topics": [
+    {"id": "model", "title": "Governing model and definitions"},
+    {"id": "visual", "title": "Visualization and starting values"},
+    {"id": "bisection", "title": "Bisection Method"},
+    {"id": "false-position", "title": "False Position Method"},
+    {"id": "newton", "title": "Newton-Raphson Method"},
+    {"id": "secant", "title": "Secant Method"},
+    {"id": "verify", "title": "Verification and error analysis"},
+    {"id": "converge", "title": "Convergence and stopping criteria"},
+    {"id": "written", "title": "Written discussion and method choice"},
+    {"id": "video", "title": "Video analysis and comparison"}
+  ],
+  "questions": [
+    {"id": "Q1", "points": 50, "criteria": [
+      {"id": "A", "points": 4}, {"id": "B", "points": 6},
+      {"id": "C", "points": 10, "subcriteria": {"recall": 2, "apply": 4, "analyze": 4}},
+      {"id": "D", "points": 10, "subcriteria": {"recall": 2, "apply": 4, "analyze": 4}},
+      {"id": "E", "points": 8, "subcriteria": {"verify": 4, "converge": 4}},
+      {"id": "F", "points": 6}, {"id": "G", "points": 6}
+    ]},
+    {"id": "Q2", "points": 50, "criteria": [
+      {"id": "A", "points": 4}, {"id": "B", "points": 6},
+      {"id": "C", "points": 10, "subcriteria": {"recall": 2, "apply": 4, "analyze": 4}},
+      {"id": "D", "points": 10, "subcriteria": {"recall": 2, "apply": 4, "analyze": 4}},
+      {"id": "E", "points": 8, "subcriteria": {"verify": 4, "converge": 4}},
+      {"id": "F", "points": 6}, {"id": "G", "points": 6}
+    ]}
+  ],
+  "allocations": [
+    {"id":"q1-a","question":"Q1","criterion":"A","topic":"model","points":4,"scores":{"remembering":4,"understanding":0,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric A"}],"rationale":"Explicit recall and labeling task; supplied assumptions, no model derivation."},
+    {"id":"q1-b","question":"Q1","criterion":"B","topic":"visual","points":6,"scores":{"remembering":0,"understanding":0,"thinking":6},"evidence":[{"source":"assessment.md","locator":"rubric B"}],"rationale":"Analyze graph and justify starting values."},
+    {"id":"q1-c-r","question":"Q1","criterion":"C","subcriterion":"recall","topic":"bisection","points":2,"scores":{"remembering":2,"understanding":0,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric C, recall"}],"rationale":"Recall the update rule is explicitly scored."},
+    {"id":"q1-c-u","question":"Q1","criterion":"C","subcriterion":"apply","topic":"bisection","points":4,"scores":{"remembering":0,"understanding":4,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric C, apply"}],"rationale":"Apply the update rule and spreadsheet references."},
+    {"id":"q1-c-t","question":"Q1","criterion":"C","subcriterion":"analyze","topic":"bisection","points":4,"scores":{"remembering":0,"understanding":0,"thinking":4},"evidence":[{"source":"assessment.md","locator":"rubric C, analyze"}],"rationale":"Analyze diagnostics and compare manual checks."},
+    {"id":"q1-d-r","question":"Q1","criterion":"D","subcriterion":"recall","topic":"false-position","points":2,"scores":{"remembering":2,"understanding":0,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric D, recall"}],"rationale":"Recall the update rule is explicitly scored."},
+    {"id":"q1-d-u","question":"Q1","criterion":"D","subcriterion":"apply","topic":"false-position","points":4,"scores":{"remembering":0,"understanding":4,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric D, apply"}],"rationale":"Apply the update rule and spreadsheet references."},
+    {"id":"q1-d-t","question":"Q1","criterion":"D","subcriterion":"analyze","topic":"false-position","points":4,"scores":{"remembering":0,"understanding":0,"thinking":4},"evidence":[{"source":"assessment.md","locator":"rubric D, analyze"}],"rationale":"Analyze diagnostics and compare manual checks."},
+    {"id":"q1-e-v","question":"Q1","criterion":"E","subcriterion":"verify","topic":"verify","points":4,"scores":{"remembering":0,"understanding":4,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric E, verification"}],"rationale":"Apply substitution and error checks."},
+    {"id":"q1-e-c","question":"Q1","criterion":"E","subcriterion":"converge","topic":"converge","points":4,"scores":{"remembering":0,"understanding":0,"thinking":4},"evidence":[{"source":"assessment.md","locator":"rubric E, convergence"}],"rationale":"Analyze convergence and justify stopping tests."},
+    {"id":"q1-f","question":"Q1","criterion":"F","topic":"written","points":6,"scores":{"remembering":0,"understanding":0,"thinking":6},"evidence":[{"source":"assessment.md","locator":"rubric F"}],"rationale":"Compare methods, evaluate limitations and justify selection."},
+    {"id":"q1-g","question":"Q1","criterion":"G","topic":"video","points":6,"scores":{"remembering":0,"understanding":0,"thinking":6},"evidence":[{"source":"assessment.md","locator":"rubric G"}],"rationale":"Analysis and critique are scored; narration alone earns no analysis credit."},
+    {"id":"q2-a","question":"Q2","criterion":"A","topic":"model","points":4,"scores":{"remembering":4,"understanding":0,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric A"}],"rationale":"Explicit recall and labeling task; supplied assumptions, no model derivation."},
+    {"id":"q2-b","question":"Q2","criterion":"B","topic":"visual","points":6,"scores":{"remembering":0,"understanding":0,"thinking":6},"evidence":[{"source":"assessment.md","locator":"rubric B"}],"rationale":"Analyze graph and justify starting values."},
+    {"id":"q2-c-r","question":"Q2","criterion":"C","subcriterion":"recall","topic":"newton","points":2,"scores":{"remembering":2,"understanding":0,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric C, recall"}],"rationale":"Recall the update rule is explicitly scored."},
+    {"id":"q2-c-u","question":"Q2","criterion":"C","subcriterion":"apply","topic":"newton","points":4,"scores":{"remembering":0,"understanding":4,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric C, apply"}],"rationale":"Apply the update rule and spreadsheet references."},
+    {"id":"q2-c-t","question":"Q2","criterion":"C","subcriterion":"analyze","topic":"newton","points":4,"scores":{"remembering":0,"understanding":0,"thinking":4},"evidence":[{"source":"assessment.md","locator":"rubric C, analyze"}],"rationale":"Analyze diagnostics and compare manual checks."},
+    {"id":"q2-d-r","question":"Q2","criterion":"D","subcriterion":"recall","topic":"secant","points":2,"scores":{"remembering":2,"understanding":0,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric D, recall"}],"rationale":"Recall the update rule is explicitly scored."},
+    {"id":"q2-d-u","question":"Q2","criterion":"D","subcriterion":"apply","topic":"secant","points":4,"scores":{"remembering":0,"understanding":4,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric D, apply"}],"rationale":"Apply the update rule and spreadsheet references."},
+    {"id":"q2-d-t","question":"Q2","criterion":"D","subcriterion":"analyze","topic":"secant","points":4,"scores":{"remembering":0,"understanding":0,"thinking":4},"evidence":[{"source":"assessment.md","locator":"rubric D, analyze"}],"rationale":"Analyze diagnostics and compare manual checks."},
+    {"id":"q2-e-v","question":"Q2","criterion":"E","subcriterion":"verify","topic":"verify","points":4,"scores":{"remembering":0,"understanding":4,"thinking":0},"evidence":[{"source":"assessment.md","locator":"rubric E, verification"}],"rationale":"Apply substitution and error checks."},
+    {"id":"q2-e-c","question":"Q2","criterion":"E","subcriterion":"converge","topic":"converge","points":4,"scores":{"remembering":0,"understanding":0,"thinking":4},"evidence":[{"source":"assessment.md","locator":"rubric E, convergence"}],"rationale":"Analyze convergence and justify stopping tests."},
+    {"id":"q2-f","question":"Q2","criterion":"F","topic":"written","points":6,"scores":{"remembering":0,"understanding":0,"thinking":6},"evidence":[{"source":"assessment.md","locator":"rubric F"}],"rationale":"Compare methods, evaluate limitations and justify selection."},
+    {"id":"q2-g","question":"Q2","criterion":"G","topic":"video","points":6,"scores":{"remembering":0,"understanding":0,"thinking":6},"evidence":[{"source":"assessment.md","locator":"rubric G"}],"rationale":"Analysis and critique are scored; narration alone earns no analysis credit."}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Cor Jesu College - College of Engineering",
+  "sheet": "Table of Specifications",
+  "first_row": 13,
+  "last_row": 22,
+  "total_row": 23,
+  "columns": {
+    "number": "A", "topic": "B",
+    "remembering_refs": "C", "remembering": "D", "remembering_percent": "E",
+    "understanding_refs": "F", "understanding": "G", "understanding_percent": "H",
+    "thinking_refs": "I", "thinking": "J", "thinking_percent": "K",
+    "points": "L", "percent": "M"
+  },
+  "fields": {
+    "program": "C7", "course_code": "A8", "course_title": "A9",
+    "academic_year": "I7", "semester": "I8", "assessment": "I9", "preparer": "A27"
+  },
+  "prefixes": {
+    "course_code": "Course Cat.No.: ", "course_title": "Course Title: "
+  },
+  "bands": {"remembering": [10, 20], "understanding": [20, 30], "thinking": [60, 100]},
+  "print_area": "A1:M31",
+  "fit_to_page": true
+}

@@ -12,6 +12,7 @@ SCRIPTS = ROOT / "skills" / "coe-tos" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import openpyxl
+from lxml import etree
 
 from coe_tos import main
 from mapping import sheets as mapping_sheets
@@ -116,6 +117,42 @@ class SupplementarySheetTests(unittest.TestCase):
         added = attach(parts, specification, hidden=True)
         self.assertEqual(len(set(added["sheet_names"])), len(added["sheet_names"]))
         self.assertEqual(len(set(added["relationship_ids"])), len(added["relationship_ids"]))
+
+
+    def test_supplementary_sheets_carry_a_print_setup(self):
+        # Without a page setup these sheets print across many pages with split columns.
+        out = self.build("printsetup", "--with-mapping")
+        parts = package(out / "TOS.xlsx")
+        added = json.loads((out / "fidelity.json").read_text())["added_parts"]
+        self.assertEqual(len(added), 4)
+        for part in added:
+            root = etree.fromstring(parts[part])
+            setup = root.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}pageSetup")
+            self.assertIsNotNone(setup, part)
+            self.assertEqual(setup.get("orientation"), "landscape", part)
+            self.assertEqual(setup.get("fitToWidth"), "1", part)
+            self.assertEqual(setup.get("fitToHeight"), "0", part)
+            prop = root.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheetPr")
+            self.assertIsNotNone(prop, part)
+            self.assertIsNotNone(prop.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}pageSetUpPr"), part)
+
+    def test_ref_column_is_wide_enough_for_subcriterion_labels(self):
+        out = self.build("widths", "--with-mapping")
+        parts = package(out / "TOS.xlsx")
+        added = json.loads((out / "fidelity.json").read_text())["added_parts"]
+        part = next(p for p in added if "Assessment mapping" in workbook_sheet_name(parts, p))
+        root = etree.fromstring(parts[part])
+        first = root.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}cols")[0]
+        self.assertGreaterEqual(float(first.get("width")), 24)
+
+
+def workbook_sheet_name(parts, part):
+    workbook = etree.fromstring(parts["xl/workbook.xml"])
+    rels = {r.get("Id"): r.get("Target") for r in etree.fromstring(parts["xl/_rels/workbook.xml.rels"])}
+    for sheet in workbook.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheets"):
+        if rels[sheet.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")].endswith(part.split("/")[-1]):
+            return sheet.get("name")
+    return ""
 
 
 def hash_bytes(path):

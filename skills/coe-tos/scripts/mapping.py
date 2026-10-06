@@ -37,6 +37,10 @@ def cells_of(values, row_number):
 
 def worksheet_xml(rows, widths):
     root = ET.Element(Q("worksheet"), nsmap={None: NS})
+    # These sheets are readable evidence, so give them a landscape, fit-to-width page
+    # setup; without it Excel splits the columns across many pages when printed.
+    prop = ET.SubElement(root, Q("sheetPr"))
+    ET.SubElement(prop, Q("pageSetUpPr"), fitToPage="1")
     views = ET.SubElement(root, Q("sheetViews"))
     view = ET.SubElement(views, Q("sheetView"), workbookViewId="0")
     ET.SubElement(view, Q("pane"), ySplit="5", topLeftCell="A6", activePane="bottomLeft", state="frozen")
@@ -63,6 +67,9 @@ def worksheet_xml(rows, widths):
                 node = ET.SubElement(ET.SubElement(cell, Q("is")), Q("t"))
                 node.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
                 node.text = text(value)
+    ET.SubElement(root, Q("pageMargins"), left="0.4", right="0.4", top="0.5", bottom="0.5",
+                  header="0.3", footer="0.3")
+    ET.SubElement(root, Q("pageSetup"), orientation="landscape", fitToWidth="1", fitToHeight="0")
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
@@ -104,7 +111,7 @@ def assessment_mapping(draft, result):
                              sub_points, sub_ledger, sub_scores[0], sub_scores[1], sub_scores[2],
                              "Published subcriterion"])
     rows.append(["TOTAL", "", published, ledger, remembers, understands, thinks, ""])
-    return "Assessment mapping", rows, [18, 42, 12, 12, 7, 7, 7, 26]
+    return "Assessment mapping", rows, [26, 40, 13, 13, 7, 7, 7, 26]
 
 
 def topic_allocation(draft, result):

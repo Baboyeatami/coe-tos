@@ -39,6 +39,28 @@ For PDF export install Microsoft Excel on macOS or LibreOffice on macOS,
 Linux or Windows. Put `soffice` on PATH (Windows normally installs it under
 `C:\Program Files\LibreOffice\program`). XLSX generation does not require Office.
 
+Rendering dependencies are checked before opening Office. For PNG-only previews
+of an existing PDF, use `render-pdf` instead of running `build` again:
+
+```sh
+python scripts/coe_tos.py render-pdf output/TOS.pdf --scale 1
+```
+
+The default scale is 1.5; use 2 for closer inspection. This command does not
+require Excel or LibreOffice. It reuses only content/version/scale-matched page
+images whose hashes still match. A preview cache hit is not visual approval.
+
+Run rendering regression tests from the repository root:
+
+```sh
+python -m unittest discover -s tests -p 'test_export_pdf.py' -v
+```
+
+Render-specific tests use PyMuPDF when installed and are skipped otherwise. They
+cover changed PDFs, corrupt cached PNGs, scale changes, dependency failures before
+Office launch, and Excel error reporting/ownership. Native export still needs a
+smoke test on a host with Office installed.
+
 Restart OpenCode after installing. Codex discovers skills automatically;
 restart if missing. Claude Code supports reload/restart when discovery fails.
 Invoke as `$coe-tos` in Codex, `/coe-tos` in Claude Code, or ask OpenCode to

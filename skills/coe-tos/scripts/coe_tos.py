@@ -6,12 +6,11 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 from decimal import Decimal
 
-from documents import extract
-from export_pdf import export
+from export_pdf import export, preflight, render_pdf
 from scoring import GROUPS, validate
-from workbooks import build, inspect, preview_workbook
 
 SKILL = Path(__file__).resolve().parents[1]
 ASSETS = SKILL / "assets"
@@ -104,20 +103,27 @@ def main(argv=None):
             command.add_argument("--xlsx-only", action="store_true")
             command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
             command.add_argument("--render", action="store_true")
+            command.add_argument("--render-scale", type=float, default=1.5)
     command = commands.add_parser("export-pdf")
     command.add_argument("workbook", type=Path)
     command.add_argument("--out", required=True, type=Path)
     command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
     command.add_argument("--render", action="store_true")
+    command.add_argument("--render-scale", type=float, default=1.5)
+    command = commands.add_parser("render-pdf", help="Render existing PDF page images without rebuilding or opening Office")
+    command.add_argument("pdf", type=Path)
+    command.add_argument("--scale", type=float, default=1.5, help="0.5 to 4; use 1 for quick previews")
     command = commands.add_parser("preview-template", help="Native PDF of the blank template using the profile's print settings")
     command.add_argument("--template", type=Path, default=ASSETS / "cjc-template.xlsx")
     command.add_argument("--profile", type=Path, default=ASSETS / "cjc-profile.json")
     command.add_argument("--out", required=True, type=Path)
     command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
     command.add_argument("--render", action="store_true")
+    command.add_argument("--render-scale", type=float, default=1.5)
     args = parser.parse_args(argv)
     try:
         if args.command == "extract":
+            from documents import extract
             documents = []
             failed = False
             for path in args.inputs:
@@ -129,21 +135,29 @@ def main(argv=None):
             write_json(args.out, {"version": 1, "documents": documents})
             return 1 if failed else 0
         if args.command == "inspect-template":
+            from workbooks import inspect
             write_json(args.out, inspect(args.template))
             return 0
         if args.command == "export-pdf":
-            info = export(args.workbook, args.out, args.backend, args.render)
+            info = export(args.workbook, args.out, args.backend, args.render, args.render_scale)
             write_json(args.out.with_suffix(".export.json"), info)
             print(args.out)
             return 0
+        if args.command == "render-pdf":
+            info = render_pdf(args.pdf, args.scale)
+            print(json.dumps(info, indent=2))
+            return 0
         if args.command == "preview-template":
+            from workbooks import preview_workbook
+            preflight(args.backend, args.render, args.render_scale)
             with tempfile.TemporaryDirectory(prefix="coe-tos-preview-") as directory:
                 copied = Path(directory) / "blank.xlsx"
                 preview_workbook(args.template, copied, read_json(args.profile))
-                info = export(copied, args.out, args.backend, args.render)
+                info = export(copied, args.out, args.backend, args.render, args.render_scale)
             write_json(args.out.with_suffix(".export.json"), info)
             print(args.out)
             return 0
+        started = time.perf_counter()
         draft, profile = read_json(args.draft), read_json(args.profile)
         result = validate(draft, profile)
         if args.command == "validate":
@@ -155,6 +169,9 @@ def main(argv=None):
         if result["errors"]:
             (args.out / "review.md").write_text(report(draft, result), encoding="utf-8")
             raise ValueError("Invalid draft: " + "; ".join(result["errors"]))
+        if not args.xlsx_only:
+            preflight(args.backend, args.render, args.render_scale)
+        from workbooks import build
         fidelity = build(args.template, args.out / "TOS.xlsx", draft, profile, result)
         write_json(args.out / "draft.json", draft)
         write_json(args.out / "template-profile.json", profile)
@@ -162,9 +179,10 @@ def main(argv=None):
         pdf = None
         if not args.xlsx_only:
             try:
-                pdf = export(args.out / "TOS.xlsx", args.out / "TOS.pdf", args.backend, args.render)
+                pdf = export(args.out / "TOS.xlsx", args.out / "TOS.pdf", args.backend, args.render, args.render_scale)
             except Exception as error:
-                pdf = {"error": str(error)}
+                pdf = {"error": str(error), "current_pdf_verified": False,
+                       "warning": "Any pre-existing PDF in this output directory may be stale; do not deliver it."}
             write_json(args.out / "pdf-checks.json", pdf)
         (args.out / "review.md").write_text(report(draft, result, fidelity, pdf), encoding="utf-8")
         with (args.out / "mapping.csv").open("w", newline="", encoding="utf-8") as stream:
@@ -174,6 +192,9 @@ def main(argv=None):
                 writer.writerow([a["id"], a["question"], a["criterion"], a.get("subcriterion", ""), a["topic"], a["points"],
                                  *(a["scores"][g] for g in GROUPS), a["rationale"]])
         print("Created", args.out / "TOS.xlsx")
+        write_json(args.out / "timings.json", {"total_seconds": round(time.perf_counter() - started, 4),
+                   "export_seconds": (pdf or {}).get("export_seconds"),
+                   "render_seconds": (pdf or {}).get("render_seconds")})
         print("Cognitive totals:", " / ".join(str(result["cognitive"][g]) for g in GROUPS))
         if pdf and pdf.get("error"):
             print("PDF incomplete:", pdf["error"], file=sys.stderr)

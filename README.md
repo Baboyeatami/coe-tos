@@ -125,6 +125,17 @@ Optional dependencies:
 - **Images:** install [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html)
   and use `extract --ocr`, or use your agent's image-analysis tools.
 
+For a quick PNG preview after exporting, render the existing PDF without rebuilding
+the workbook or reopening Office:
+
+```sh
+python skills/coe-tos/scripts/coe_tos.py render-pdf output/TOS.pdf --scale 1
+```
+
+Use the default scale of 1.5 or `--scale 2` for detailed visual review. Matching
+page images are cached by PDF content, renderer version and scale; visual approval
+still requires opening and checking the images.
+
 ### 4. Ask the agent
 
 OpenCode:

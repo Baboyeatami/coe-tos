@@ -5,7 +5,7 @@ license: MIT; institutional template artwork retains its owners' rights.
 compatibility: Works with any instruction-following LLM. File generation needs file access and Python 3.10+ with the bundled requirements; PDF export needs Excel on macOS or LibreOffice. OCR and page rendering are optional dependencies.
 metadata:
   author: Engr. Jamie Eduardo Rosal, MSCpE
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # CoE-TOS
@@ -38,6 +38,11 @@ If a required fact is missing, ask a focused question or mark it unresolved.
 Never treat prior example metadata or template placeholders as the current user's facts.
 
 ## 2. Extract and inspect
+
+Batch independent source extraction and template inspection. Read their structured
+outputs with the host's file-reading tools; avoid repeated shell snippets to print
+small portions. Ask for all missing identification fields together, using exact
+validation values from inspection. Read warnings inside each document entry.
 
 Run:
 
@@ -80,6 +85,13 @@ them that way**; Thinking includes analysis, synthesis/creation and evaluation.
 Knowledge used during an application task is not automatically a separately
 scored recall task. Explain ambiguous classifications and retain uncertainty.
 
+Before rendering, settle the classification and review it once against the rubric.
+Naming a sampling method used, recording variable types and citing sources are not
+automatically independent recall tasks. Simple graph descriptions may be
+comprehension. Keep whole rubric criteria intact where possible; if no numeric
+subcriteria are published, label any finer topic partition as proposed for adoption.
+Do not create elaborate point splits merely to fit a template's cognitive bands.
+
 Allocate each score once. A repeated question reference in different cognitive
 columns is acceptable when its marks are partitioned; duplicated full scores
 are not. If a shared score is split across topics, its ledger rows must sum
@@ -116,6 +128,9 @@ python "<skill-root>/scripts/coe_tos.py" build --draft draft.json --template tem
 ```
 
 `--render` requires PyMuPDF. Omit it when the host has another PDF renderer.
+Backend and render dependencies are checked before workbook construction/native
+export. `build` already validates the ledger; a separate `validate` run is useful
+while revising scores, but need not immediately precede every build.
 Omit `--template` and `--profile` to use the bundled CJC pair.
 Use `--xlsx-only` only when explicitly delivering a partial output; explain
 that PDF export is incomplete. `--backend` accepts `auto`, `excel-mac` or
@@ -126,6 +141,36 @@ directly inside the XLSX package. It preserves the original styles, formulas,
 validations, protection, drawings, media and relationships. Failed arithmetic
 or fidelity checks stop the build. Unsupported formula caches are cleared,
 reported and left for native recalculation, never filled with guessed results.
+
+### Faster previews and recovery
+
+Build/export once after the ledger and metadata are settled. For another PNG
+preview of an existing PDF, use the render-only command instead of rebuilding:
+
+```sh
+python "<skill-root>/scripts/coe_tos.py" render-pdf output/TOS.pdf --scale 1
+python "<skill-root>/scripts/coe_tos.py" render-pdf output/TOS.pdf --scale 2
+```
+
+`--scale 1` is a quick preview; use 1.5 (default) or 2 for dense text. Native PDF
+quality is unaffected. Build/export/preview-template also accept `--render-scale`.
+PNG previews are cached by PDF content, scale and PyMuPDF version, with image hashes
+verified before reuse. Changed content receives different filenames to avoid stale
+thumbnails. Cached images still require human/agent visual review.
+
+If native export fails after XLSX creation, fix the backend issue and run
+`export-pdf output/TOS.xlsx --out output/TOS.pdf --render`. Do not regenerate the
+ledger or workbook merely to retry an export. Reconcile the recovery's
+`TOS.export.json` with `pdf-checks.json` and `review.md` after checking the result.
+Never deliver an older PDF left in a reused output folder after an export failure.
+Keep manual visual findings in a separate `visual-review.md` (keyed to the final
+PDF hash) or append them only after the last build; generated `review.md` is replaced
+by each build. `timings.json` separates native-export and PNG-render duration.
+
+Excel export uses a uniquely named temporary workbook, polls for that workbook
+instead of assuming the active document, calculates its sheet and exports through
+the workbook-level PDF command. It never closes unrelated workbooks. Keep the
+Office automation serial; independent text extraction may run in parallel.
 
 ## 6. Review actual outputs
 

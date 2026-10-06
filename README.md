@@ -14,9 +14,13 @@ the scripts extract documents, reconcile scores and generate the artifacts.
 ## What it does
 
 - Reads exams, rubrics, syllabi, learning outcomes and teaching materials together.
+- Accepts material as files **or pasted straight into the conversation**.
 - Maps an **existing examination** or drafts a **proposed assessment blueprint**.
 - Records evidence locators and cognitive classification rationales.
 - Reconciles question, criterion, **published subcriterion**, topic and cognitive totals.
+- Generates an **assessment mapping** table in the review: published points beside
+  ledger points for every criterion and published subcriterion, with topic allocation
+  and the band's actual range.
 - Fills the bundled Cor Jesu College (CJC) form or another mapped XLSX template.
 - Preserves the original banner, grouped drawings, logos, formulas, styles,
   validations, protection and package relationships.
@@ -215,6 +219,19 @@ agent to locate the file and run `extract` on its path rather than asking for a
 reformat. Because neither path provides a page image to inspect, published totals are
 read back to the requester, and `review.md` records the confirmation.
 
+## Command reference
+
+| Command | Purpose |
+|:--|:--|
+| `extract` | Read files into one `sources.json` with locators (`--ocr` for scans) |
+| `ingest-text` | Add text supplied in chat, with `--stdin`, `--name` and `--append` |
+| `inspect-template` | Report a template's fields, formulas, validation lists and geometry |
+| `validate` | Check the ledger's arithmetic and band results |
+| `build` | Write the workbook, review, mapping and export (`--render`, `--xlsx-only`, `--backend`) |
+| `export-pdf` | Export an existing workbook to PDF without rebuilding |
+| `render-pdf` | Render page PNGs from an existing PDF; cached, no Office needed |
+| `preview-template` | Native PDF of the blank template under the profile's print settings |
+
 ## Deterministic command-line workflow
 
 The CLI is independent of the harness. **The LLM writes `draft.json` after
@@ -222,6 +239,7 @@ analyzing sources; extraction alone does not automatically draft a TOS.**
 
 ```sh
 python skills/coe-tos/scripts/coe_tos.py extract exam.pdf rubric.docx syllabus.xlsx --out output/sources.json
+python skills/coe-tos/scripts/coe_tos.py ingest-text --name exam-rubric.txt --stdin --out output/sources.json
 python skills/coe-tos/scripts/coe_tos.py inspect-template department-template.xlsx --out output/template-inspection.json
 # The agent now creates draft.json and a profile based on the inspected template.
 python skills/coe-tos/scripts/coe_tos.py validate --draft draft.json --profile profile.json --out output/validation.json
@@ -306,7 +324,9 @@ results are never guessed. See [template handling](skills/coe-tos/references/tem
 The CJC template includes institutional placeholders. Fill current metadata;
 reviewer/dean/signature details must be confirmed separately. Its program label
 has restricted validation, so the multi-program example leaves A7 intact and
-uses short codes in C7. Full names are recorded in the review metadata.
+uses short codes in C7. Full names are recorded in the review metadata. Its
+semester list is equally exact: ` 1st` includes a leading space, `2nd` and `Summer`
+do not.
 
 Regenerate a blank template PDF without modifying the supplied Excel file:
 
@@ -321,12 +341,13 @@ python -m unittest discover -s tests -v
 python scripts/package_skill.py --out dist/coe-tos.zip
 ```
 
-Tests cover document extraction, published subcriterion reconciliation, duplicate
-and invalid scores, source-evidence requirements, band conflicts, capacity,
-formula caches, a second template profile, formula-overwrite refusal and
-byte-identical institutional drawing/media preservation. GitHub Actions runs
-the portable tests on Windows, Linux and macOS with Python 3.10 and 3.12.
-Native PDF export needs an installed renderer and is checked separately.
+Tests cover document extraction, chat-pasted ingestion and locator shape, published
+subcriterion reconciliation, duplicate and invalid scores, source-evidence
+requirements, band conflicts, capacity, formula caches, a second template profile,
+formula-overwrite refusal, byte-identical institutional drawing/media preservation,
+render caching and native-export failure handling. GitHub Actions runs the portable
+tests on Windows, Linux and macOS with Python 3.10 and 3.12. Native PDF export needs
+an installed renderer and is checked separately.
 
 ## Troubleshooting
 
@@ -336,8 +357,15 @@ Native PDF export needs an installed renderer and is checked separately.
   permission. `--xlsx-only` is an explicit partial-delivery option.
 - **Scanned input has little text:** use OCR or the host's vision tools; verify
   symbols and scores before drafting.
+- **Attachment the model cannot open:** give the skill the file path, or let it
+  locate the download, and let it run `extract`. It does not need to read a PDF
+  directly to map it.
+- **Rubric pasted in chat:** totals cannot be checked against a page image. Read the
+  published points back to the requester and record `input_mode` plus who confirmed
+  them; the review carries a warning until then.
 - **Invalid template list value:** inspect `template-inspection.json` and use
-  the exact listed value, including meaningful spaces.
+  the exact listed value, including meaningful spaces. In the CJC form ` 1st`
+  carries a leading space while `2nd` and `Summer` do not.
 - **More topics than rows:** consolidate supported topics or provide a larger
   template and revised profile; do not silently drop coverage.
 - **Scores pass but classifications look wrong:** arithmetic validation cannot

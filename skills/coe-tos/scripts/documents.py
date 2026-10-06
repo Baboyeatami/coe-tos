@@ -32,6 +32,20 @@ def convert_office(source, extension, destination):
     return result
 
 
+def text_document(text, name, warnings=None):
+    """Document for text supplied directly in chat, using the same line locators as a file."""
+    result = {"source": name, "format": ".txt", "segments": [], "warnings": []}
+    for line_number, line in enumerate(text.splitlines(), 1):
+        if str(line).strip():
+            result["segments"].append({"locator": f"line {line_number}", "text": str(line)})
+    if not result["segments"]:
+        result["warnings"].append("No readable content supplied; do not draft from an empty source.")
+    else:
+        result["warnings"].append("Text was supplied directly in chat: table layout, emphasis and totals cannot be visually verified. Read published scores back to the requester for confirmation.")
+    result["warnings"].extend(warnings or [])
+    return result
+
+
 def extract(path, ocr=False):
     path = Path(path).resolve()
     if not path.is_file():

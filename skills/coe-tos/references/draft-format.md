@@ -17,11 +17,13 @@ and preservation deterministically; it does not call an LLM or infer source mean
 | `assumptions` | Optional array of disclosed assumptions |
 | `proposed_changes` | Optional array of explicit assessment changes |
 
-Each criterion is `{id, points}` with optional `subcriteria`, a map of published
-subcriterion ID to points. Include that map whenever the source publishes a
-scoring breakdown; excluding it weakens validation. If the source says 5
-verification points and 3 convergence points, a 4/4 mapping must fail even
-though the combined score is still 8.
+Each criterion is `{id, points}` with optional `title` and `subcriteria`, a map of
+published subcriterion ID to points. Questions may also carry a `title`. Include the
+`subcriteria` map whenever the source publishes a scoring breakdown; excluding it
+weakens validation. If the source says 5 verification points and 3 convergence
+points, a 4/4 mapping must fail even though the combined score is still 8. Titles are
+cosmetic: the generated review prints the ID when a title is absent, so an existing
+draft without titles stays valid.
 
 Each allocation has:
 
@@ -57,6 +59,19 @@ is retained in draft/review files. Add a field address to the profile to print
 it in a template that supports that field. Do not invent teaching hours or
 approval signatures. Missing mapped values become `[To be supplied]`; a field
 with a restrictive list may require a valid selection before building.
+
+### Input provenance
+
+Record how the sources arrived so the review can show it:
+
+| Field | Meaning |
+|:--|:--|
+| `input_mode` | `file`, `chat-pasted` or `chat-attachment`. `chat-pasted` adds a validation warning that page-image verification was impossible. |
+| `sources` | Optional list of supplied file names or chat input labels. |
+| `totals_confirmed_by` / `totals_confirmed_on` | Who confirmed the published rubric totals, and when. Expected for chat-supplied input. |
+
+These fields are review metadata only. They never change printed template values
+unless the profile maps them, and they do not affect scoring validation.
 
 ## Teaching-hours allocation for proposed blueprints
 

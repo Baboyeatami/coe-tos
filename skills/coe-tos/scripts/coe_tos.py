@@ -27,20 +27,86 @@ def write_json(path, value):
                                default=lambda x: str(x) if isinstance(x, Decimal) else str(x)) + "\n", encoding="utf-8")
 
 
-def report(draft, result, fidelity=None, pdf=None):
+def report(draft, result, profile=None, fidelity=None, pdf=None):
     def safe(value):
         return str(value).replace("|", "\\|").replace("\n", " ")
 
-    lines = ["# CoE-TOS review", "", f"Course: {draft.get('metadata', {}).get('course_title', '[To be supplied]')}",
+    def points(value):
+        """Render a score without float artifacts such as 12.000000000000002."""
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        return str(value)
+
+    bands = (profile or {}).get("bands", {})
+
+    def band_text(group):
+        bounds = bands.get(group)
+        if not bounds:
+            return "Not specified"
+        shown = "-".join(points(value) for value in bounds)
+        return ("Within" if result["bands"].get(group) else "Outside") + f" band ({shown}%)"
+
+    def ledger_totals(entries):
+        ledger = sum((Decimal(str(entry.get("points", 0))) for entry in entries), Decimal(0))
+        scores = [sum((Decimal(str(entry.get("scores", {}).get(group, 0))) for entry in entries), Decimal(0))
+                  for group in GROUPS]
+        return ledger, scores
+
+    metadata = draft.get("metadata", {})
+    lines = ["# CoE-TOS review", "", f"Course: {metadata.get('course_title', '[To be supplied]')}",
              f"Mode: {draft.get('mode')}", "", "## Status", "",
              "Arithmetic checks: " + ("FAILED" if result["errors"] else "PASSED"),
              "Cognitive classifications: evidence-led draft; instructor review required.",
              "Source citations are supplied by the agent; arithmetic validation does not independently verify their meaning.",
              "", "## Totals", "", "| Group | Points | Percent | Band |", "|:--|--:|--:|:--|"]
     for group in GROUPS:
-        band = "Within band" if result["bands"].get(group) else ("Outside band" if group in result["bands"] else "Not specified")
-        lines.append(f"| {group.title()} | {result['cognitive'][group]} | {result['shares'][group]:.2f}% | {band} |")
-    lines += [f"| Total | {result['total']} | {'100%' if result['total'] else 'Undefined'} | |", "", "## Question reconciliation", "",
+        lines.append(f"| {group.title()} | {result['cognitive'][group]} | {result['shares'][group]:.2f}% | {band_text(group)} |")
+    lines += [f"| Total | {result['total']} | {'100%' if result['total'] else 'Undefined'} | |"]
+
+    lines += ["", "## Assessment mapping", "",
+              "Published scoring mapped to the allocation ledger. `Ref` matches the workbook Test Item No. cells.",
+              "Source points come from the rubric; ledger points are what the allocations award.",
+              "", "| Ref | Published criterion | Source points | Ledger points | R | U | T | Partition |",
+              "|:--|:--|--:|--:|--:|--:|--:|:--|"]
+    grouped = {}
+    for allocation in draft.get("allocations", []):
+        grouped.setdefault((allocation.get("question"), allocation.get("criterion")), []).append(allocation)
+    for question in draft.get("questions", []):
+        for criterion in question.get("criteria", []):
+            entries = grouped.get((question.get("id"), criterion.get("id")), [])
+            ledger, scores = ledger_totals(entries)
+            declared = criterion.get("subcriteria") or {}
+            partition = ("Published subcriteria retained" if declared else
+                         "Proposed topic partition" if len(entries) > 1 else "Single allocation")
+            lines.append("| " + " | ".join(map(safe, [
+                f"{question.get('id')}-{criterion.get('id')}",
+                criterion.get("title") or criterion.get("id"),
+                points(criterion.get("points")), points(ledger),
+                *(points(score) for score in scores), partition])) + " |")
+            for sub, sub_points in declared.items():
+                sub_ledger, sub_scores = ledger_totals([entry for entry in entries if entry.get("subcriterion") == sub])
+                lines.append("| " + " | ".join(map(safe, [
+                    f"{question.get('id')}-{criterion.get('id')} / {sub}", str(sub),
+                    points(sub_points), points(sub_ledger),
+                    *(points(score) for score in sub_scores), "Published subcriterion"])) + " |")
+
+    lines += ["", "## Topic allocation", "", "| Topic | R | U | T | Total | Share |", "|:--|--:|--:|--:|--:|--:|"]
+    rows = []
+    for topic in draft.get("topics", []):
+        scores = result["topic_scores"].get(topic.get("id"), {})
+        values = [Decimal(str(scores.get(group, 0))) for group in GROUPS]
+        total = sum(values, Decimal(0))
+        rows.append(values)
+        share = f"{total * 100 / result['total']:.2f}%" if result["total"] else "n/a"
+        lines.append("| " + " | ".join(map(safe, [topic.get("title") or topic.get("id"),
+                                                   *(points(value) for value in values),
+                                                   points(total), share])) + " |")
+    totals = [sum((row[index] for row in rows), Decimal(0)) for index in range(len(GROUPS))]
+    grand = sum(totals, Decimal(0))
+    share = f"{grand * 100 / result['total']:.2f}%" if result["total"] else "n/a"
+    lines.append("| " + " | ".join(["TOTAL", *(points(value) for value in totals), points(grand), share]) + " |")
+
+    lines += ["", "## Question reconciliation", "",
               "| Question | Remembering | Understanding | Thinking | Total |", "|:--|--:|--:|--:|--:|"]
     for question, scores in result["question_scores"].items():
         lines.append(f"| {safe(question)} | " + " | ".join(str(scores[g]) for g in GROUPS) + f" | {sum(scores.values())} |")
@@ -52,6 +118,29 @@ def report(draft, result, fidelity=None, pdf=None):
         ref = f"{allocation.get('question', '?')}/{allocation.get('criterion', '?')}/{allocation.get('subcriterion', '—')}"
         scores = " / ".join(str(allocation.get("scores", {}).get(g, "?")) for g in GROUPS)
         lines.append("| " + " | ".join(map(safe, [allocation.get("id", "?"), ref, allocation.get("topic", "?"), allocation.get("points", "?"), scores, evidence, allocation.get("rationale", "")])) + " |")
+    provenance = {}
+    for allocation in draft.get("allocations", []):
+        for item in allocation.get("evidence", []):
+            entry = provenance.setdefault(item.get("source", "?"), {"allocations": set(), "locators": set()})
+            entry["allocations"].add(allocation.get("id"))
+            entry["locators"].add(item.get("locator"))
+    lines += ["", "## Source inputs", ""]
+    notes = []
+    if metadata.get("input_mode"):
+        notes.append(f"- input_mode: {metadata['input_mode']}")
+    if metadata.get("totals_confirmed_by"):
+        confirmed = f"- Published totals confirmed by: {metadata['totals_confirmed_by']}"
+        if metadata.get("totals_confirmed_on"):
+            confirmed += f" on {metadata['totals_confirmed_on']}"
+        notes.append(confirmed)
+    lines.extend(notes)
+    if provenance:
+        lines += [""] if notes else []
+        lines += ["| Source | Allocations | Distinct locators |", "|:--|--:|--:|"]
+        for source, entry in sorted(provenance.items()):
+            lines.append(f"| {safe(source)} | {len(entry['allocations'])} | {len(entry['locators'])} |")
+    lines.append(f"- Distinct evidence locators recorded: {result.get('evidence_locators', 0)}")
+
     lines += ["", "## Checks and unresolved items", ""]
     lines.extend("- ERROR: " + e for e in result["errors"])
     lines.extend("- " + w for w in result["warnings"])
@@ -74,7 +163,7 @@ def report(draft, result, fidelity=None, pdf=None):
     else:
         lines += ["- PDF export not performed."]
     lines += ["", "## Metadata", ""]
-    lines.extend(f"- {key}: {value}" for key, value in draft.get("metadata", {}).items())
+    lines.extend(f"- {key}: {value}" for key, value in metadata.items())
     lines += ["", "## Assessment changes", ""]
     lines.extend("- " + str(change) for change in draft.get("proposed_changes", []))
     if not draft.get("proposed_changes"):
@@ -89,6 +178,12 @@ def main(argv=None):
     command.add_argument("inputs", nargs="+", type=Path)
     command.add_argument("--out", required=True, type=Path)
     command.add_argument("--ocr", action="store_true")
+    command = commands.add_parser("ingest-text", help="Add text supplied in chat to a sources JSON report")
+    command.add_argument("--name", required=True, help="Label recorded as the source, for example exam-rubric.txt")
+    command.add_argument("--stdin", action="store_true", help="Read the supplied text from standard input")
+    command.add_argument("input", nargs="?", type=Path, help="Text file to ingest; omit when using --stdin")
+    command.add_argument("--append", type=Path, help="Existing sources JSON to merge into")
+    command.add_argument("--out", required=True, type=Path)
     command = commands.add_parser("inspect-template", help="Inspect fields, formulas, validations, dimensions and drawings")
     command.add_argument("template", nargs="?", type=Path, default=ASSETS / "cjc-template.xlsx")
     command.add_argument("--out", required=True, type=Path)
@@ -134,6 +229,19 @@ def main(argv=None):
                     documents.append({"source": path.name, "error": str(error), "segments": []})
             write_json(args.out, {"version": 1, "documents": documents})
             return 1 if failed else 0
+        if args.command == "ingest-text":
+            from documents import text_document
+            if args.stdin == bool(args.input):
+                raise ValueError("Provide exactly one of --stdin or a text file path")
+            text = sys.stdin.read() if args.stdin else args.input.read_text(encoding="utf-8")
+            document = text_document(text, args.name)
+            collected = {"version": 1, "documents": []}
+            if args.append and args.append.is_file():
+                collected["documents"].extend(read_json(args.append).get("documents", []))
+            collected["documents"].append(document)
+            write_json(args.out, collected)
+            print(f"Ingested {len(document['segments'])} lines as {args.name} into {args.out}")
+            return 0
         if args.command == "inspect-template":
             from workbooks import inspect
             write_json(args.out, inspect(args.template))
@@ -167,7 +275,7 @@ def main(argv=None):
         args.out.mkdir(parents=True, exist_ok=True)
         write_json(args.out / "validation.json", result)
         if result["errors"]:
-            (args.out / "review.md").write_text(report(draft, result), encoding="utf-8")
+            (args.out / "review.md").write_text(report(draft, result, profile), encoding="utf-8")
             raise ValueError("Invalid draft: " + "; ".join(result["errors"]))
         if not args.xlsx_only:
             preflight(args.backend, args.render, args.render_scale)
@@ -184,7 +292,7 @@ def main(argv=None):
                 pdf = {"error": str(error), "current_pdf_verified": False,
                        "warning": "Any pre-existing PDF in this output directory may be stale; do not deliver it."}
             write_json(args.out / "pdf-checks.json", pdf)
-        (args.out / "review.md").write_text(report(draft, result, fidelity, pdf), encoding="utf-8")
+        (args.out / "review.md").write_text(report(draft, result, profile, fidelity, pdf), encoding="utf-8")
         with (args.out / "mapping.csv").open("w", newline="", encoding="utf-8") as stream:
             writer = csv.writer(stream)
             writer.writerow(["id", "question", "criterion", "subcriterion", "topic", "points", *GROUPS, "rationale"])

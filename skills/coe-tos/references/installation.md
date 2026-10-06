@@ -50,6 +50,17 @@ The default scale is 1.5; use 2 for closer inspection. This command does not
 require Excel or LibreOffice. It reuses only content/version/scale-matched page
 images whose hashes still match. A preview cache hit is not visual approval.
 
+Text supplied directly in chat is ingested with `ingest-text`, which needs no
+extra dependency and records `line N` locators:
+
+```sh
+python scripts/coe_tos.py ingest-text --name exam-rubric.txt --stdin --out sources.json
+```
+
+It adds a warning that pasted text cannot be visually verified, and
+`draft.json` metadata `input_mode: chat-pasted` repeats that caution in
+`review.md`.
+
 Run rendering regression tests from the repository root:
 
 ```sh

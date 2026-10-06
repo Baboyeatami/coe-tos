@@ -5,7 +5,7 @@ license: MIT; institutional template artwork retains its owners' rights.
 compatibility: Works with any instruction-following LLM. File generation needs file access and Python 3.10+ with the bundled requirements; PDF export needs Excel on macOS or LibreOffice. OCR and page rendering are optional dependencies.
 metadata:
   author: Engr. Jamie Eduardo Rosal, MSCpE
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # CoE-TOS
@@ -50,6 +50,35 @@ Run:
 python "<skill-root>/scripts/coe_tos.py" extract exam.pdf rubric.docx syllabus.xlsx --out sources.json
 python "<skill-root>/scripts/coe_tos.py" inspect-template template.xlsx --out template-inspection.json
 ```
+
+### Chat-supplied inputs
+
+Exam or rubric material may arrive in the conversation instead of as a file.
+
+- **Text pasted inline:** pipe it to `ingest-text`, which records `line N`
+  locators exactly as a text file would, so evidence citations stay uniform:
+
+  ```sh
+  python "<skill-root>/scripts/coe_tos.py" ingest-text --name exam-rubric.txt --stdin --out sources.json
+  python "<skill-root>/scripts/coe_tos.py" ingest-text --name rubric.txt --stdin --append sources.json --out sources.json
+  ```
+
+  Give each paste a descriptive `--name`. The command records a warning that layout,
+  emphasis and totals cannot be visually verified.
+- **PDF, Word or image attachments the model cannot open directly:** when the harness
+  reports that the model cannot read the attachment, do not stop and do not ask the
+  requester to reformat it. Ask for the path, or locate the file in the usual
+  download/attachment locations, then run `extract` on that path and read the JSON
+  as text. Record how the attachment was resolved so the source stays traceable.
+
+For every chat-supplied input:
+
+- Keep the supplied text verbatim; never reconstruct, tidy or silently correct it.
+- Read each published total back to the requester and record the confirmation before
+  building. Set `input_mode` in metadata (`file`, `chat-pasted` or `chat-attachment`)
+  so validation warns that page-image verification was impossible.
+- Where a paste loses table layout, ask which value belongs to which column instead of
+  assuming. Treat any unreadable portion as an extraction gap, never as a zero.
 
 Native readers cover PDF page text, DOCX paragraphs/tables, XLSX/XLSM cells and
 UTF text. `--ocr` uses OCRmyPDF for scanned PDFs and Tesseract for images.
@@ -116,9 +145,11 @@ with three grouped cognitive categories. Adapt other layouts explicitly before
 building. Never silently truncate topics or overwrite template formulas.
 
 Use only anchor cells of merges. Choose exact validation-list values. CJC's
-semester list includes a leading space in ` 1st`; its multi-program example
-uses short codes in C7, leaving the validated A7 label intact. Keep full names
-in the review metadata. Abbreviate text transparently when it cannot fit.
+semester list stores ` 1st` with a leading space while `2nd` and `Summer` have none,
+so copy the value exactly as listed and let the build reject a near miss. Its
+multi-program example uses short codes in C7, leaving the validated A7 label intact.
+Keep full names in the review metadata. Abbreviate text transparently when it cannot
+fit.
 
 ## 5. Validate, build and export
 
@@ -178,11 +209,14 @@ Confirm:
 
 1. Ledger points sum to each subcriterion, criterion, question and exam total.
 2. Cognitive points and percentages reconcile; band conflicts remain visible.
-3. Workbook package fidelity passes and the input template is unchanged.
-4. Native PDF includes the header/logo, identification fields and full form.
-5. **Every rendered page** is readable: no clipped text, overlaps, tiny fit-to-page
+3. The generated `review.md` **Assessment mapping** table shows published points beside
+   ledger points for every criterion and published subcriterion, and its **Topic
+   allocation** table totals the exam. Both are read from the same validated ledger.
+4. Workbook package fidelity passes and the input template is unchanged.
+5. Native PDF includes the header/logo, identification fields and full form.
+6. **Every rendered page** is readable: no clipped text, overlaps, tiny fit-to-page
    type, split signature fields, omitted topic rows or broken pagination.
-6. Displayed PDF totals agree with the workbook; all unsupported caches have
+7. Displayed PDF totals agree with the workbook; all unsupported caches have
    been natively recalculated before claiming displayed totals are verified.
 
 Rendering is not visual approval. Open page images with the host's vision/image
@@ -191,12 +225,18 @@ leave visual review pending. If an image seems stale, inspect a freshly rendered
 uniquely named crop and compare PDF text; do not change the workbook on a
 contradictory cached thumbnail alone.
 
+For chat-supplied input there is no source page to render. State in `review.md` that
+page-image verification was not possible, and record `input_mode` together with who
+confirmed the published totals and when.
+
 ## 7. Deliver
 
 Return paths/links to `TOS.xlsx`, `TOS.pdf`, `review.md`, `draft.json`,
 `mapping.csv`, validation and fidelity reports. State the total points,
 cognitive split, whether this maps an existing exam or is a proposed blueprint,
 and any missing metadata, source gaps, noncompliant bands or unfinished PDF checks.
+Summarize the assessment mapping and topic allocation, and flag any within-criterion
+partition that the source does not publish.
 Never claim arithmetic validation proves educational validity or source accuracy.
 
 For installation and dependency details see [installation](references/installation.md).

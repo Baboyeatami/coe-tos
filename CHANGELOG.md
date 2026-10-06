@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0
+
+- Added `ingest-text` so text pasted in chat joins the workflow with the same
+  `line N` locators as a file, including `--append` for multiple pastes.
+- Documented handling of attachments the model cannot open directly: locate the
+  file, extract it, and keep the source traceable.
+- Added input-provenance metadata (`input_mode`, `sources`, `totals_confirmed_by`)
+  and a warning when pasted input cannot be checked against page images.
+- `review.md` now generates an assessment mapping table (published versus ledger
+  points per criterion and published subcriterion) and a topic allocation table,
+  both derived from the validated ledger.
+- Band results in `review.md` show the profile's actual band range.
+- Added regression tests for chat ingestion and the generated report sections.
+
 ## 1.1.0
 
 - Added render-only PDF previews with content-keyed, hash-verified PNG caching.

@@ -122,6 +122,9 @@ def validate(draft, profile):
             warnings.append(f"{group}: {shares[group]:.2f}% is outside {low}-{high}%. Do not relabel tasks to force compliance; propose assessment changes.")
     if not draft.get("metadata", {}).get("course_title"):
         warnings.append("Course title is missing; identify the field as unresolved.")
+    input_mode = str(draft.get("metadata", {}).get("input_mode", "")).strip().lower()
+    if input_mode in ("chat", "chat-pasted", "pasted"):
+        warnings.append("input_mode is chat-pasted: published totals could not be checked against page images. Read every published criterion total back to the requester for confirmation before use.")
     warnings.extend(str(x) for x in draft.get("assumptions", []))
     return {"errors": errors, "warnings": warnings, "total": total,
             "cognitive": cognitive, "shares": shares, "topic_scores": topic_scores,

@@ -195,10 +195,25 @@ Verified installation-path references:
 | DOC / XLS / ODT / ODS / RTF | LibreOffice conversion, then native extraction | Converted layout and locators |
 | PNG / JPG / TIFF / other supported images | Optional Tesseract OCR | Recognition errors and table structure |
 | Other supplied files | Harness extractor or explicit conversion | Unsupported binary formats are reported, never silently skipped |
+| Text pasted in chat | `ingest-text`, `line N` locators | Transcription accuracy; confirm published totals; layout and emphasis are lost |
 
 You can supply any file to the agent, but not every binary format has a built-in
 reader. The CLI returns a nonzero status for failed extraction and preserves
 successfully extracted sources in the same JSON report.
+
+### Material supplied in chat
+
+Exam or rubric text can be pasted into the conversation instead of attached:
+
+```sh
+python skills/coe-tos/scripts/coe_tos.py ingest-text --name exam-rubric.txt --stdin --out output/sources.json
+```
+
+Add `--append` to record a second paste alongside the first. When a PDF, Word or
+image attachment arrives that the model cannot open directly, the skill instructs the
+agent to locate the file and run `extract` on its path rather than asking for a
+reformat. Because neither path provides a page image to inspect, published totals are
+read back to the requester, and `review.md` records the confirmation.
 
 ## Deterministic command-line workflow
 
@@ -245,7 +260,7 @@ visual approval; the agent must inspect every page.
 |:--|:--|
 | `TOS.xlsx` | Filled, verified Excel template |
 | `TOS.pdf` | Native spreadsheet PDF export |
-| `review.md` | Totals, allocation evidence/rationales, assumptions and pending checks |
+| `review.md` | Totals with band ranges, assessment mapping, topic allocation, allocation evidence/rationales, source inputs, assumptions and pending checks |
 | `draft.json` | Reproducible allocation ledger and metadata |
 | `mapping.csv` | Flattened allocation ledger |
 | `validation.json` | Exact arithmetic and band results |

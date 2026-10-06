@@ -5,7 +5,7 @@ license: MIT; institutional template artwork retains its owners' rights.
 compatibility: Works with any instruction-following LLM. File generation needs file access and Python 3.10+ with the bundled requirements; PDF export needs Excel on macOS or LibreOffice. OCR and page rendering are optional dependencies.
 metadata:
   author: Engr. Jamie Eduardo Rosal, MSCpE
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # CoE-TOS
@@ -173,6 +173,29 @@ validations, protection, drawings, media and relationships. Failed arithmetic
 or fidelity checks stop the build. Unsupported formula caches are cleared,
 reported and left for native recalculation, never filled with guessed results.
 
+### Assessment mapping inside the workbook
+
+The institutional form has no room for criterion-level mapping, so `review.md`
+carries it by default. When the reader wants it in Excel too, add supplementary
+worksheets:
+
+```sh
+python "<skill-root>/scripts/coe_tos.py" build --draft draft.json --out output --render --with-mapping
+```
+
+This appends `Assessment mapping`, `Topic allocation`, `Allocation ledger` and
+`Notes` sheets, generated from the same validated ledger, and records them in
+`fidelity.json` as `added_sheets`/`added_parts`. The template's own worksheet,
+styles, drawings and media stay byte-identical, and the sheets carry no formulas.
+
+They are **hidden by default** so the native PDF export still contains only the
+institutional form. Use `--mapping-visible` to print them, and expect a much
+longer PDF whose tables can split across pages. Ask the requester which they
+prefer before choosing, and state in the delivery which mode was used.
+
+Do not add these sheets to a form that must remain byte-identical to the
+institutional original; that guarantee is forfeited once a sheet is appended.
+
 ### Faster previews and recovery
 
 Build/export once after the ledger and metadata are settled. For another PNG
@@ -212,7 +235,9 @@ Confirm:
 3. The generated `review.md` **Assessment mapping** table shows published points beside
    ledger points for every criterion and published subcriterion, and its **Topic
    allocation** table totals the exam. Both are read from the same validated ledger.
-4. Workbook package fidelity passes and the input template is unchanged.
+4. Workbook package fidelity passes and the input template is unchanged. If
+   `--with-mapping` was used, confirm `fidelity.json` lists the added sheets and
+   that the delivered PDF still shows the form only.
 5. Native PDF includes the header/logo, identification fields and full form.
 6. **Every rendered page** is readable: no clipped text, overlaps, tiny fit-to-page
    type, split signature fields, omitted topic rows or broken pagination.

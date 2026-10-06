@@ -15,7 +15,9 @@ from scoring import GROUPS, number
 NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG = "http://schemas.openxmlformats.org/package/2006/relationships"
+CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 Q = lambda name: f"{{{NS}}}{name}"
+QCT = lambda name: f"{{{CT}}}{name}"
 
 
 def parse(data):
@@ -246,9 +248,13 @@ def normalized_sheet(data, edited, print_changes=False):
     return ET.tostring(root, method="c14n")
 
 
-def verify(template, output, profile, edited):
+def verify(template, output, profile, edited, added=None):
+    added = added or {"parts": [], "relationship_ids": [], "sheet_names": []}
+    new_parts = set(added["parts"])
+    relationship_ids = set(added["relationship_ids"])
+    sheet_names = set(added["sheet_names"])
     before, after = package(template), package(output)
-    if set(before) != set(after):
+    if set(after) - set(before) != new_parts or set(before) - set(after):
         raise ValueError("Workbook package parts added or dropped")
     paths = sheet_paths(before)
     for name in before:
@@ -264,8 +270,26 @@ def verify(template, output, profile, edited):
                             names.remove(n)
                     if not len(names):
                         root.remove(names)
+            # Declared supplementary sheets are additions, not edits to existing sheets.
+            for node in list(b.find(Q("sheets"))):
+                if node.get("name") in sheet_names:
+                    b.find(Q("sheets")).remove(node)
             if ET.tostring(a, method="c14n") != ET.tostring(b, method="c14n"):
                 raise ValueError("Workbook properties beyond print area/calculation changed")
+        elif name == "[Content_Types].xml":
+            a, b = parse(before[name]), parse(after[name])
+            for node in list(b.findall(QCT("Override"))):
+                if node.get("PartName", "").lstrip("/") in new_parts:
+                    b.remove(node)
+            if ET.tostring(a, method="c14n") != ET.tostring(b, method="c14n"):
+                raise ValueError("Content types changed beyond declared supplementary sheets")
+        elif name == "xl/_rels/workbook.xml.rels":
+            a, b = parse(before[name]), parse(after[name])
+            for node in list(b):
+                if node.get("Id") in relationship_ids:
+                    b.remove(node)
+            if ET.tostring(a, method="c14n") != ET.tostring(b, method="c14n"):
+                raise ValueError("Workbook relationships changed beyond declared supplementary sheets")
         elif name in paths.values():
             target = name == paths[profile["sheet"]]
             if normalized_sheet(before[name], edited if target else set(), target) != normalized_sheet(after[name], edited if target else set(), target):
@@ -281,11 +305,15 @@ def verify(template, output, profile, edited):
                         raise ValueError(f"Cell formatting changed: {address}")
         elif before[name] != after[name]:
             raise ValueError(f"Template part changed: {name}")
+    for part in new_parts:
+        if not after.get(part):
+            raise ValueError(f"Declared supplementary sheet is missing or empty: {part}")
     return {"package_parts_preserved": len(before), "formula_and_style_fidelity": True,
-            "unchanged_drawings_and_media": len([n for n in before if n.startswith(("xl/drawings/", "xl/media/"))])}
+            "unchanged_drawings_and_media": len([n for n in before if n.startswith(("xl/drawings/", "xl/media/"))]),
+            "added_sheets": sorted(sheet_names), "added_parts": sorted(new_parts)}
 
 
-def build(template, output, draft, profile, result):
+def build(template, output, draft, profile, result, extra_sheets=None, hidden_sheets=True):
     template, output = Path(template), Path(output)
     if template.suffix.lower() != ".xlsx" or output.suffix.lower() != ".xlsx":
         raise ValueError("Generation requires an XLSX template and XLSX output")
@@ -332,6 +360,10 @@ def build(template, output, draft, profile, result):
                 write_cache(cell_node(root, cell.coordinate), value)
         parts[paths[ws.title]] = serialize(root)
     apply_print(parts, paths, profile)
+    added = {"parts": [], "relationship_ids": [], "sheet_names": []}
+    if extra_sheets:
+        import mapping
+        added = mapping.attach(parts, extra_sheets, hidden=hidden_sheets)
     output.parent.mkdir(parents=True, exist_ok=True)
     # A staged file is verified before publishing; failures cannot replace prior output.
     import tempfile
@@ -340,7 +372,10 @@ def build(template, output, draft, profile, result):
         with ZipFile(template) as source, ZipFile(staged, "w") as target:
             for item in source.infolist():
                 target.writestr(item, parts[item.filename])
-        fidelity = verify(template, staged, profile, set(values))
+            for name, payload in parts.items():
+                if name not in {item.filename for item in source.infolist()}:
+                    target.writestr(name, payload)
+        fidelity = verify(template, staged, profile, set(values), added)
         if hashlib.sha256(template.read_bytes()).hexdigest() != digest:
             raise ValueError("Source template changed during build")
         staged.replace(output)

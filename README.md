@@ -22,6 +22,8 @@ the scripts extract documents, reconcile scores and generate the artifacts.
   ledger points for every criterion and published subcriterion, with topic allocation
   and the band's actual range.
 - Fills the bundled Cor Jesu College (CJC) form or another mapped XLSX template.
+- Optionally adds the assessment mapping as hidden worksheets in the same workbook
+  (`--with-mapping`), keeping the form itself and its export unchanged.
 - Preserves the original banner, grouped drawings, logos, formulas, styles,
   validations, protection and package relationships.
 - Exports PDF through Microsoft Excel on macOS or LibreOffice.
@@ -227,7 +229,7 @@ read back to the requester, and `review.md` records the confirmation.
 | `ingest-text` | Add text supplied in chat, with `--stdin`, `--name` and `--append` |
 | `inspect-template` | Report a template's fields, formulas, validation lists and geometry |
 | `validate` | Check the ledger's arithmetic and band results |
-| `build` | Write the workbook, review, mapping and export (`--render`, `--xlsx-only`, `--backend`) |
+| `build` | Write the workbook, review, mapping and export (`--render`, `--xlsx-only`, `--backend`, `--with-mapping`) |
 | `export-pdf` | Export an existing workbook to PDF without rebuilding |
 | `render-pdf` | Render page PNGs from an existing PDF; cached, no Office needed |
 | `preview-template` | Native PDF of the blank template under the profile's print settings |
@@ -288,7 +290,11 @@ visual approval; the agent must inspect every page.
 | `TOS-pages/*.png` | Optional native page renders |
 
 Review and mapping are separate files so the original workbook's package
-structure can remain intact. No extra worksheet is inserted into the template.
+structure can remain intact, and by default no extra worksheet is inserted into
+the template. Pass `--with-mapping` to `build` when you want the assessment
+mapping, topic allocation, allocation ledger and notes inside the workbook too;
+those sheets are added to the package directly and listed in `fidelity.json`,
+and they are hidden so the exported PDF still shows the form only.
 
 ## Templates and rules
 
@@ -345,7 +351,7 @@ Tests cover document extraction, chat-pasted ingestion and locator shape, publis
 subcriterion reconciliation, duplicate and invalid scores, source-evidence
 requirements, band conflicts, capacity, formula caches, a second template profile,
 formula-overwrite refusal, byte-identical institutional drawing/media preservation,
-render caching and native-export failure handling. GitHub Actions runs the portable
+render caching, native-export failure handling and supplementary worksheet generation. GitHub Actions runs the portable
 tests on Windows, Linux and macOS with Python 3.10 and 3.12. Native PDF export needs
 an installed renderer and is checked separately.
 
@@ -366,6 +372,9 @@ an installed renderer and is checked separately.
 - **Invalid template list value:** inspect `template-inspection.json` and use
   the exact listed value, including meaningful spaces. In the CJC form ` 1st`
   carries a leading space while `2nd` and `Summer` do not.
+- **Mapping wanted inside the workbook:** `build --with-mapping` appends it as
+  hidden sheets; `--mapping-visible` prints them too, at the cost of a longer,
+  column-splitting PDF.
 - **More topics than rows:** consolidate supported topics or provide a larger
   template and revised profile; do not silently drop coverage.
 - **Scores pass but classifications look wrong:** arithmetic validation cannot

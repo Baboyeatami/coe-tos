@@ -149,8 +149,12 @@ def report(draft, result, profile=None, fidelity=None, pdf=None):
     if fidelity:
         lines += [f"- Template SHA-256: `{fidelity['template_sha256']}`.",
                   f"- All {fidelity['package_parts_preserved']} package parts retained; original drawing/media parts are byte-identical.",
-                  f"- {fidelity['formula_count']} original formulas retained; styles, merges, validations and protection preserved.",
-                  "- Explicit profile print-area/fit settings and calculation flags are the only non-value changes."]
+                  f"- {fidelity['formula_count']} original formulas retained; styles, merges, validations and protection preserved."]
+        if fidelity.get("added_sheets"):
+            lines += ["- The template's own worksheet changed only in declared values, formula caches and print settings.",
+                      f"- Supplementary worksheets added: {', '.join(fidelity['added_sheets'])}. They are hidden, so the PDF export contains the form only; unhide them in Excel to read them."]
+        else:
+            lines.append("- Explicit profile print-area/fit settings and calculation flags are the only non-value changes.")
         if fidelity["unsupported_formula_caches"]:
             lines += ["- Some formula caches require Excel/LibreOffice recalculation:"]
             lines.extend("  - " + w for w in fidelity["unsupported_formula_caches"])
@@ -199,6 +203,10 @@ def main(argv=None):
             command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
             command.add_argument("--render", action="store_true")
             command.add_argument("--render-scale", type=float, default=1.5)
+            command.add_argument("--with-mapping", action="store_true",
+                                 help="Also add assessment mapping, topic allocation, ledger and notes sheets")
+            command.add_argument("--mapping-visible", action="store_true",
+                                 help="Show the supplementary sheets instead of hiding them from the PDF export")
     command = commands.add_parser("export-pdf")
     command.add_argument("workbook", type=Path)
     command.add_argument("--out", required=True, type=Path)
@@ -280,7 +288,12 @@ def main(argv=None):
         if not args.xlsx_only:
             preflight(args.backend, args.render, args.render_scale)
         from workbooks import build
-        fidelity = build(args.template, args.out / "TOS.xlsx", draft, profile, result)
+        extra = None
+        if args.with_mapping:
+            from mapping import sheets
+            extra = sheets(draft, result)
+        fidelity = build(args.template, args.out / "TOS.xlsx", draft, profile, result,
+                         extra_sheets=extra, hidden_sheets=not args.mapping_visible)
         write_json(args.out / "draft.json", draft)
         write_json(args.out / "template-profile.json", profile)
         write_json(args.out / "fidelity.json", fidelity)

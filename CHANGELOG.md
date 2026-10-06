@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0
+
+- Added optional supplementary worksheets to the delivered workbook:
+  assessment mapping, topic allocation, allocation ledger and notes.
+  `build --with-mapping` generates them from the validated ledger; they are
+  hidden by default so the exported form PDF stays one page, and
+  `--mapping-visible` prints them.
+- Sheets are written into the OOXML package directly, so the template's own
+  worksheet, styles, drawings and media stay byte-identical.
+- The fidelity gate now accounts for declared additions and still refuses any
+  undeclared sheet, part or workbook change.
+- `fidelity.json` reports `added_sheets` and `added_parts`, and `review.md`
+  states when supplementary worksheets were added.
+
 ## 1.2.0
 
 - Added `ingest-text` so text pasted in chat joins the workflow with the same

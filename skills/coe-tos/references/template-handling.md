@@ -27,6 +27,32 @@ Macro-enabled input may be extracted, but generation requires an XLSX template.
 Digital signatures cannot remain valid after edits; signed/encrypted forms
 need a suitable editable template. No workbook macros are executed by the scripts.
 
+## Supplementary worksheets
+
+`--with-mapping` appends generated worksheets (`Assessment mapping`, `Topic
+allocation`, `Allocation ledger`, `Notes`) to the delivered workbook. They are
+written straight into the OOXML package: a new worksheet part plus the matching
+entries in `xl/workbook.xml`, `xl/_rels/workbook.xml.rels` and
+`[Content_Types].xml`. No library save round trip occurs, so the template's own
+worksheet, styles, drawings and media stay byte-identical.
+
+The new sheets use inline strings and no formulas, so nothing needs
+recalculating. Percentages are written as preformatted text because the
+template's style table is deliberately left untouched.
+
+The fidelity gate treats these additions as declared: `verify()` requires the
+set of added parts to match `fidelity.json` exactly, removes only the declared
+sheet entries and relationships before comparing, and still fails on any other
+package, worksheet or workbook change. An undeclared sheet is refused.
+
+They are hidden by default because Excel does not print hidden sheets, which
+keeps the exported form at one page. `--mapping-visible` prints them, and the
+tables can split across pages; review every page if you use it.
+
+Once a sheet is appended, the workbook is no longer byte-identical to the
+institutional original. Use this only when the reader asks for the mapping inside
+Excel.
+
 ## Formulas
 
 The deterministic evaluator supports cell/range references, cross-sheet references,

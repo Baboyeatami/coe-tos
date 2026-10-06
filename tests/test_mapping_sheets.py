@@ -119,6 +119,34 @@ class SupplementarySheetTests(unittest.TestCase):
         self.assertEqual(len(set(added["relationship_ids"])), len(added["relationship_ids"]))
 
 
+    def test_writer_refuses_rows_that_would_emit_malformed_references(self):
+        # A bare string row once iterated character-by-character and emitted "A[" refs,
+        # which produced a workbook openpyxl and Excel could not read.
+        from mapping import worksheet_xml
+        import re as _re
+        for rows, expect_refusal in (([["a", "b"], ["c"]], False), (["bare string"], False),
+                                     ([5], True), ([{"a": 1}], True)):
+            with self.subTest(rows=rows):
+                if expect_refusal:
+                    with self.assertRaises(ValueError):
+                        worksheet_xml(rows, [10])
+                else:
+                    xml = worksheet_xml(rows, [10]).decode()
+                    for ref in _re.findall(r'<c r="([^"]+)"', xml):
+                        self.assertRegex(ref, r"^[A-Z]+[0-9]+$", ref)
+
+    def test_generated_workbook_is_readable_by_openpyxl(self):
+        out = self.build("readable", "--with-mapping")
+        book = openpyxl.load_workbook(out / "TOS.xlsx", data_only=True)
+        topics = book["Topic allocation"]
+        headers = [cell.value for cell in topics[5]]
+        self.assertIn("Refs", headers)
+        refs_column = headers.index("Refs") + 1
+        reference_cells = [row[refs_column - 1].value for row in topics.iter_rows(min_row=6)
+                           if row[refs_column - 1].value]
+        self.assertTrue(reference_cells)
+        self.assertTrue(any("-" in value for value in reference_cells))
+
     def test_supplementary_sheets_carry_a_print_setup(self):
         # Without a page setup these sheets print across many pages with split columns.
         out = self.build("printsetup", "--with-mapping")

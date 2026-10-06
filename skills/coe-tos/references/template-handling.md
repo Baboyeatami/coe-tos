@@ -53,6 +53,16 @@ Once a sheet is appended, the workbook is no longer byte-identical to the
 institutional original. Use this only when the reader asks for the mapping inside
 Excel.
 
+## Test Item No. cells
+
+The institutional row height is fixed, so a topic that maps to several criteria
+can overflow its `Test Item No.` cell. Set `refs_max_chars` in the profile to the
+usable width (the bundled CJC profile uses 16). References are then abbreviated as
+`Q1-c1b +2`: as many as fit, plus the number omitted. No information is lost,
+because the full list appears in the allocation ledger, in the generated
+`Topic allocation` sheet's Refs column, and in `review.md`. Omit `refs_max_chars`
+to print every reference in full.
+
 ## Formulas
 
 The deterministic evaluator supports cell/range references, cross-sheet references,

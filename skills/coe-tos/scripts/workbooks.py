@@ -137,6 +137,28 @@ def field_values(draft, profile):
     return values
 
 
+def fit_refs(refs, limit):
+    """Abbreviate a Test Item No. cell that cannot hold every reference.
+
+    The institutional row height is fixed, so a long list wraps and is clipped.
+    Keep as many references as fit and state how many were dropped; the full list
+    stays in the allocation ledger and the supplementary mapping sheets.
+    """
+    if not refs:
+        return ""
+    joined = "; ".join(refs)
+    if not limit or len(joined) <= limit:
+        return joined
+    kept = 1
+    while kept < len(refs) - 1:
+        kept += 1
+        candidate = "; ".join(refs[:kept]) + f" +{len(refs) - kept}"
+        if len(candidate) > limit:
+            kept -= 1
+            break
+    return "; ".join(refs[:kept]) + f" +{len(refs) - kept}"
+
+
 def projected_values(draft, profile, result):
     values = field_values(draft, profile)
     columns = profile["columns"]
@@ -148,7 +170,7 @@ def projected_values(draft, profile, result):
         for group in GROUPS:
             refs = sorted({f"{a['question']}-{a['criterion']}" for a in draft["allocations"]
                            if topic and a["topic"] == topic["id"] and number(a["scores"][group]) > 0})
-            basic[group + "_refs"] = "; ".join(refs) if refs else ("--" if topic else None)
+            basic[group + "_refs"] = fit_refs(refs, profile.get("refs_max_chars")) if refs else ("--" if topic else None)
             basic[group] = scores[group] if scores else None
         for name, value in basic.items():
             values[f"{columns[name]}{row}"] = value

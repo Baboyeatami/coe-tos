@@ -5,7 +5,7 @@ license: MIT; institutional template artwork retains its owners' rights.
 compatibility: Works with any instruction-following LLM. File generation needs file access and Python 3.10+ with the bundled requirements; PDF export needs Excel on macOS or LibreOffice. OCR and page rendering are optional dependencies.
 metadata:
   author: Engr. Jamie Eduardo Rosal, MSCpE
-  version: "1.3.0"
+  version: "1.3.1"
 ---
 
 # CoE-TOS

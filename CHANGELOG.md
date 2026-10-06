@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.1
+
+- Fixed malformed cell references when a supplementary-sheet row was supplied as a
+  bare string; such rows produced a workbook that openpyxl and Excel could not read.
+  Rows are now normalised, and non-sequence rows are refused with a clear error.
+- Added `refs_max_chars` to the profile. A topic mapping to several criteria can now
+  overflow the fixed row height, so Test Item No. cells abbreviate to `Q1-c1b +2`
+  instead of wrapping and clipping. The full list appears in the allocation ledger,
+  the Topic allocation sheet's new Refs column, and `review.md`.
+
 ## 1.3.0
 
 - Added optional supplementary worksheets to the delivered workbook:

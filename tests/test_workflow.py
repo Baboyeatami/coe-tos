@@ -24,6 +24,32 @@ from coe_tos import main
 ASSETS = ROOT / "skills" / "coe-tos" / "assets"
 
 
+class RefFittingTests(unittest.TestCase):
+    def test_long_reference_lists_abbreviate_instead_of_clipping(self):
+        from workbooks import fit_refs
+        self.assertEqual(fit_refs(["Q1-c1b", "Q2-c2b", "Q3-c3a"], 16), "Q1-c1b +2")
+        self.assertEqual(fit_refs(["Q1-a", "Q2-b", "Q3-c", "Q4-d"], 16), "Q1-a; Q2-b +2")
+
+    def test_short_reference_lists_are_untouched(self):
+        from workbooks import fit_refs
+        self.assertEqual(fit_refs(["EX-c1", "EX-c2"], 16), "EX-c1; EX-c2")
+        self.assertEqual(fit_refs(["Q3-c3b"], 16), "Q3-c3b")
+        self.assertEqual(fit_refs([], 16), "")
+        self.assertEqual(fit_refs(["Q1-a", "Q2-b", "Q3-c"], None), "Q1-a; Q2-b; Q3-c")
+
+    def test_project_never_exceeds_the_declared_reference_width(self):
+        draft = json.loads((ROOT / "examples" / "draft.json").read_text())
+        profile = json.loads((ASSETS / "cjc-profile.json").read_text())
+        result = validate(draft, profile)
+        limit = profile["refs_max_chars"]
+        values = projected_values(draft, profile, result)
+        column = profile["columns"]["understanding_refs"]
+        for index in range(len(draft["topics"])):
+            cell = values.get(f"{column}{profile['first_row'] + index}")
+            if cell:
+                self.assertLessEqual(len(cell), limit, cell)
+
+
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.draft = json.loads((ROOT / "examples" / "draft.json").read_text())

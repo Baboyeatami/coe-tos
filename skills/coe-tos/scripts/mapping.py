@@ -28,8 +28,21 @@ def text(value):
     return value if isinstance(value, str) else str(value)
 
 
+def as_row(values, row_number):
+    """Normalise one row to a list of cells.
+
+    A bare string counts as a single cell. Anything else that is not a sequence is
+    refused, because iterating it by accident emits malformed cell references.
+    """
+    if isinstance(values, str):
+        return [values]
+    if not isinstance(values, (list, tuple)):
+        raise ValueError(f"Row {row_number} must be a list of cells, got {type(values).__name__}")
+    return list(values)
+
+
 def cells_of(values, row_number):
-    """Yield (address, value) for one row, skipping empty cells."""
+    """Yield (address, value) for one normalised row, skipping empty cells."""
     for index, value in enumerate(values):
         if value is not None:
             yield f"{COLUMN(index)}{row_number}", value
@@ -52,7 +65,8 @@ def worksheet_xml(rows, widths):
                               width=str(width), customWidth="1")
     data = ET.SubElement(root, Q("sheetData"))
     for offset, values in enumerate(rows, 1):
-        if not values or not any(value is not None for value in values):
+        values = as_row(values, offset)
+        if not any(value is not None for value in values):
             continue
         row = ET.SubElement(data, Q("row"), r=str(offset))
         for address, value in cells_of(values, offset):
@@ -116,21 +130,24 @@ def assessment_mapping(draft, result):
 
 def topic_allocation(draft, result):
     rows = [["Topic allocation"], ["Cognitive points and share by topic, matching the contents grid on the form."],
-            [f"Total: {_plain(result['total'])} points"], [],
-            ["Topic", "R", "U", "T", "Total", "Share"]]
+            [f"Total: {_plain(result['total'])} points"],
+            ["Refs column lists every criterion mapped to the topic; the form abbreviates when a cell cannot hold them all."],
+            ["Topic", "R", "U", "T", "Total", "Share", "Refs"]]
     totals = [Decimal(0)] * 4
     for topic in draft["topics"]:
         scores = result["topic_scores"].get(topic["id"], {})
         values = [Decimal(str(scores.get(group, 0))) for group in GROUPS]
         total = sum(values, Decimal(0))
         share = f"{total * 100 / result['total']:.2f}%" if result["total"] else "n/a"
-        rows.append([topic["title"], values[0], values[1], values[2], total, share])
+        refs = sorted({f"{a['question']}-{a['criterion']}" for a in draft["allocations"]
+                       if a["topic"] == topic["id"]})
+        rows.append([topic["title"], values[0], values[1], values[2], total, share, "; ".join(refs)])
         for index, value in enumerate(values):
             totals[index] += value
         totals[3] += total
     rows.append(["TOTAL", totals[0], totals[1], totals[2], totals[3],
-                 f"{totals[3] * 100 / result['total']:.2f}%" if result["total"] else "n/a"])
-    return "Topic allocation", rows, [46, 7, 7, 7, 9, 11]
+                 f"{totals[3] * 100 / result['total']:.2f}%" if result["total"] else "n/a", ""])
+    return "Topic allocation", rows, [46, 7, 7, 7, 9, 11, 34]
 
 
 def allocation_ledger(draft):

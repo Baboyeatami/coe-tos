@@ -73,6 +73,10 @@ Record how the sources arrived so the review can show it:
 These fields are review metadata only. They never change printed template values
 unless the profile maps them, and they do not affect scoring validation.
 
+Default delivery retains metadata on Notes and every allocation's source names,
+locators and rationale on Allocation ledger. draft.json is an internal build input,
+not a required separate deliverable; external copies require --diagnostics.
+
 ## Teaching-hours allocation for proposed blueprints
 
 When requested, derive proposed topic weights from actual hours:

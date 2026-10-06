@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.4.0
+
+- Default builds deliver only TOS.xlsx, with visible assessment mapping, topic
+  allocation, evidence-bearing allocation ledger and Notes tabs.
+- PDF/native rendering is opt-in with --pdf; external reports require --diagnostics.
+  --xlsx-only and --with-mapping remain compatibility aliases; --form-only preserves
+  the old form-only behavior.
+- Source names/locators, metadata, assumptions, band results and preservation/cache
+  checks are embedded in the workbook. Output layout inspection is not falsely
+  claimed by a structural-only build.
+- Reuse template bytes and an allocation index; avoid repeated package reads and
+  repeated reference scans. Supported formula caches are read back before publishing.
+- Reuse existing template header/wrap styles on supplementary tabs without changing
+  styles.xml. Preserve decimal values and use valid Excel column names beyond AZ.
+- Updated skill workflow to use temporary work files, settle scoring before building,
+  and distinguish truncated previews from genuine extraction gaps.
+
 ## 1.3.1
 
 - Fixed malformed cell references when a supplementary-sheet row was supplied as a

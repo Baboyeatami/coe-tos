@@ -1,17 +1,19 @@
 """Optional supplementary worksheets: assessment mapping, topic allocation, ledger, notes.
 
-These sheets are generated for the reader, not for the institutional form. They are
-attached directly to the OOXML package so the template's own sheet, styles, drawings
-and media stay byte-identical, and they carry no formulas so no cache recalculation
-is required. Percentages are written as preformatted text because the template's
-style table is preserved untouched.
+These sheets are generated for the reader and attached directly to the OOXML
+package. The institutional sheet keeps its structure/formulas/styles outside
+declared edits; styles.xml, drawings and media retain their original bytes.
+Supplementary tables are validated snapshots with no new formulas. Percentages
+are preformatted text because the template's style table is preserved untouched.
 """
 from decimal import Decimal
-from xml.sax.saxutils import escape
+import json
+import math
 
 from lxml import etree as ET
 
-from scoring import GROUPS
+from scoring import GROUPS, allocation_index
+from openpyxl.utils import get_column_letter
 
 NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -21,7 +23,7 @@ Q = lambda name: f"{{{NS}}}{name}"
 QCT = lambda name: f"{{{CT}}}{name}"
 QPKG = lambda name: f"{{{PKG}}}{name}"
 QREL = lambda name: f"{{{REL}}}{name}"
-COLUMN = lambda index: chr(ord("A") + index) if index < 26 else f"A{chr(ord('A') + index - 26)}"
+COLUMN = lambda index: get_column_letter(index + 1)
 
 
 def text(value):
@@ -48,7 +50,23 @@ def cells_of(values, row_number):
             yield f"{COLUMN(index)}{row_number}", value
 
 
-def worksheet_xml(rows, widths):
+def template_styles(workbook):
+    """Reuse existing general-format header/wrap styles without changing styles.xml."""
+    result = {}
+    for index, style in enumerate(workbook._cell_styles):
+        if style.numFmtId != 0:
+            continue
+        alignment = workbook._alignments[style.alignmentId]
+        font = workbook._fonts[style.fontId]
+        if font.bold and "header" not in result:
+            result["header"] = index
+        if alignment.wrapText and not font.bold and "body" not in result:
+            result["body"] = index
+    return result
+
+
+def worksheet_xml(rows, widths, styles=None):
+    styles = styles or {}
     root = ET.Element(Q("worksheet"), nsmap={None: NS})
     # These sheets are readable evidence, so give them a landscape, fit-to-width page
     # setup; without it Excel splits the columns across many pages when printed.
@@ -69,13 +87,22 @@ def worksheet_xml(rows, widths):
         if not any(value is not None for value in values):
             continue
         row = ET.SubElement(data, Q("row"), r=str(offset))
+        if offset >= 5 and "body" in styles:
+            lines = max((sum(max(1, math.ceil(len(line) / max(1, widths[i] - 2)))
+                             for line in str(value).split("\n"))
+                         for i, value in enumerate(values) if value is not None and i < len(widths)), default=1)
+            row.set("ht", str(min(409, max(18, lines * 15))))
+            row.set("customHeight", "1")
         for address, value in cells_of(values, offset):
             cell = ET.SubElement(row, Q("c"), r=address)
+            style = styles.get("header") if offset == 5 else styles.get("body") if offset > 5 and isinstance(value, str) else None
+            if style is not None:
+                cell.set("s", str(style))
             if isinstance(value, bool):
                 cell.set("t", "b")
                 ET.SubElement(cell, Q("v")).text = str(int(value))
             elif isinstance(value, (int, float, Decimal)):
-                ET.SubElement(cell, Q("v")).text = str(int(value)) if float(value) == int(value) else str(float(value))
+                ET.SubElement(cell, Q("v")).text = str(value)
             else:
                 cell.set("t", "inlineStr")
                 node = ET.SubElement(ET.SubElement(cell, Q("is")), Q("t"))
@@ -98,10 +125,8 @@ def _plain(value):
     return text(int(value) if Decimal(str(value)) == Decimal(str(value)).to_integral_value() else value)
 
 
-def assessment_mapping(draft, result):
-    grouped = {}
-    for allocation in draft["allocations"]:
-        grouped.setdefault((allocation["question"], allocation["criterion"]), []).append(allocation)
+def assessment_mapping(draft, result, index=None):
+    grouped = (index or allocation_index(draft))["criteria"]
     rows = [["Assessment mapping"], ["Published scoring beside the allocation ledger. Ref matches the Test Item No. cells on the form."],
             [f"Mode: {draft['mode']} | Total: {_plain(result['total'])} points | R/U/T: "
              + " / ".join(_plain(result["cognitive"][group]) for group in GROUPS)], [],
@@ -128,7 +153,8 @@ def assessment_mapping(draft, result):
     return "Assessment mapping", rows, [26, 40, 13, 13, 7, 7, 7, 26]
 
 
-def topic_allocation(draft, result):
+def topic_allocation(draft, result, index=None):
+    lookup = index or allocation_index(draft)
     rows = [["Topic allocation"], ["Cognitive points and share by topic, matching the contents grid on the form."],
             [f"Total: {_plain(result['total'])} points"],
             ["Refs column lists every criterion mapped to the topic; the form abbreviates when a cell cannot hold them all."],
@@ -139,8 +165,7 @@ def topic_allocation(draft, result):
         values = [Decimal(str(scores.get(group, 0))) for group in GROUPS]
         total = sum(values, Decimal(0))
         share = f"{total * 100 / result['total']:.2f}%" if result["total"] else "n/a"
-        refs = sorted({f"{a['question']}-{a['criterion']}" for a in draft["allocations"]
-                       if a["topic"] == topic["id"]})
+        refs = sorted({f"{a['question']}-{a['criterion']}" for a in lookup["topics"][topic["id"]]})
         rows.append([topic["title"], values[0], values[1], values[2], total, share, "; ".join(refs)])
         for index, value in enumerate(values):
             totals[index] += value
@@ -151,37 +176,56 @@ def topic_allocation(draft, result):
 
 
 def allocation_ledger(draft):
-    rows = [["Allocation ledger"], ["Every allocated score, allocated once. Evidence locators and assumptions are in review.md."],
+    rows = [["Allocation ledger"], ["Every allocated score, allocated once. Source evidence is retained here; assumptions and checks are on Notes."],
             [f"Allocations: {len(draft['allocations'])}"], [],
-            ["Allocation", "Question", "Criterion", "Subcriterion", "Topic", "Points", "R", "U", "T", "Rationale"]]
+            ["Allocation", "Question", "Criterion", "Subcriterion", "Topic", "Points", "R", "U", "T", "Rationale", "Sources", "Source locators"]]
     total = Decimal(0)
     for allocation in draft["allocations"]:
         total += Decimal(str(allocation["points"]))
         rows.append([allocation["id"], allocation["question"], allocation["criterion"],
                      allocation.get("subcriterion", ""), allocation["topic"], allocation["points"],
                      allocation["scores"]["remembering"], allocation["scores"]["understanding"],
-                     allocation["scores"]["thinking"], allocation.get("rationale", "")])
-    rows.append(["TOTAL", "", "", "", "", total, "", "", "", ""])
-    return "Allocation ledger", rows, [18, 9, 10, 14, 10, 8, 6, 6, 6, 70]
+                     allocation["scores"]["thinking"], allocation.get("rationale", ""),
+                     "; ".join(dict.fromkeys(e["source"] for e in allocation["evidence"])),
+                     "\n".join(f"{e['source']}: {e['locator']}" for e in allocation["evidence"])])
+    rows.append(["TOTAL", "", "", "", "", total, "", "", "", "", "", ""])
+    return "Allocation ledger", rows, [22, 9, 10, 16, 12, 8, 6, 6, 6, 70, 44, 85]
 
 
-def notes(draft, result):
+def notes(draft, result, profile=None):
     rows = [["Notes and unresolved items"],
-            ["Arithmetic validation does not establish educational validity or source accuracy."], [],
+            ["Arithmetic validation does not establish educational validity or source accuracy."], [], [],
             ["Kind", "Text"]]
+    for key, value in draft.get("metadata", {}).items():
+        if value is not None:
+            shown = json.dumps(value, ensure_ascii=False) if isinstance(value, (list, dict)) else str(value)
+            rows.append([f"Metadata: {key}", shown])
+    rows.append(["Assessment mode", draft["mode"]])
+    rows.append(["Exam points", result["total"]])
+    rows.append(["Arithmetic validation", "Passed: published question, criterion and declared subcriterion totals reconcile."])
+    rows.append(["Output visual review", "Not performed by this workbook-only build. Structural checks are not visual approval."])
+    for group in GROUPS:
+        bounds = (profile or {}).get("bands", {}).get(group)
+        band = f"{bounds[0]}-{bounds[1]}%" if bounds else "not specified"
+        status = ("within band" if result["bands"].get(group) else "outside band") if bounds else "no target band"
+        rows.append([f"Cognitive: {group}", f"{result['cognitive'][group]} points; {result['shares'][group]:.2f}%; target {band}; {status}"])
     for text_value in draft.get("assumptions", []):
         rows.append(["Assumption", text_value])
     for text_value in draft.get("proposed_changes", []):
         rows.append(["Proposed change", text_value])
     for text_value in result.get("warnings", []):
+        if text_value in draft.get("assumptions", []):
+            continue
         rows.append(["Warning", text_value])
+    rows.append(["Scoring accountability", "Cognitive classifications and any proposed within-criterion splits require instructor review; band conflicts are not repaired by relabelling tasks."])
     return "Notes", rows, [18, 110]
 
 
-def sheets(draft, result):
+def sheets(draft, result, profile=None, index=None):
     """Ordered (name, rows, widths) specifications for the supplementary sheets."""
-    return [assessment_mapping(draft, result), topic_allocation(draft, result),
-            allocation_ledger(draft), notes(draft, result)]
+    index = index or allocation_index(draft)
+    return [assessment_mapping(draft, result, index), topic_allocation(draft, result, index),
+            allocation_ledger(draft), notes(draft, result, profile)]
 
 
 def _next_id(rels):
@@ -192,7 +236,7 @@ def _next_id(rels):
     return f"rId{index}"
 
 
-def attach(parts, specifications, hidden=True):
+def attach(parts, specifications, hidden=True, styles=None):
     """Add worksheet parts to the package and register them in workbook.xml, rels and content types.
 
     Returns the list of new parts so the fidelity gate can account for them.
@@ -214,7 +258,7 @@ def attach(parts, specifications, hidden=True):
         while part in parts or part in added:
             index += 1
             part = f"xl/worksheets/sheet{max(len(existing) + offset + index, 1)}.xml"
-        parts[part] = worksheet_xml(rows, widths)
+        parts[part] = worksheet_xml(rows, widths, styles)
         added.append(part)
         relationship_ids.append(relationship)
         sheet_names.append(name)

@@ -145,7 +145,7 @@ class AssessmentMappingReportTests(unittest.TestCase):
 
     def test_generated_review_file_contains_new_sections(self):
         output = self.directory / "out"
-        self.assertEqual(main(["build", "--draft", str(EXAMPLE), "--out", str(output), "--xlsx-only"]), 0)
+        self.assertEqual(main(["build", "--draft", str(EXAMPLE), "--out", str(output), "--xlsx-only", "--diagnostics"]), 0)
         text = (output / "review.md").read_text(encoding="utf-8")
         for heading in ("Assessment mapping", "Topic allocation", "Source inputs"):
             self.assertIn(f"## {heading}", text)

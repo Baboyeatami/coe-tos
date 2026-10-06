@@ -6,8 +6,9 @@ An XLSX is an OOXML ZIP package. `workbooks.py` reads the supplied workbook,
 changes cell values and supported formula caches in worksheet XML, and updates
 only the profile's print area, fit-to-page properties and calculation flags.
 It writes a staged package and checks fidelity before replacing the output.
-All other parts retain their original bytes, including styles, grouped drawings,
-images, VML comments, themes, relationships, content types and document metadata.
+Other non-edited parts retain their original bytes, including styles, grouped
+drawings, images, VML comments, themes and document metadata. Added supplementary
+sheets require declared workbook/content-type/relationship registrations.
 
 No load-and-save round trip through openpyxl is used to generate the artifact.
 That avoids the grouped-shape/header-loss issue found in the original workflow.
@@ -29,29 +30,31 @@ need a suitable editable template. No workbook macros are executed by the script
 
 ## Supplementary worksheets
 
-`--with-mapping` appends generated worksheets (`Assessment mapping`, `Topic
+Default builds append generated worksheets (`Assessment mapping`, `Topic
 allocation`, `Allocation ledger`, `Notes`) to the delivered workbook. They are
 written straight into the OOXML package: a new worksheet part plus the matching
 entries in `xl/workbook.xml`, `xl/_rels/workbook.xml.rels` and
-`[Content_Types].xml`. No library save round trip occurs, so the template's own
-worksheet, styles, drawings and media stay byte-identical.
+`[Content_Types].xml`. No library save round trip occurs. The form retains its
+original structure/styles outside declared value/cache/print edits; styles.xml,
+drawings and media remain byte-identical. --form-only omits supplementary tabs.
 
 The new sheets use inline strings and no formulas, so nothing needs
 recalculating. Percentages are written as preformatted text because the
 template's style table is deliberately left untouched.
 
 The fidelity gate treats these additions as declared: `verify()` requires the
-set of added parts to match `fidelity.json` exactly, removes only the declared
+set of added parts to match the declared additions exactly, removes only the declared
 sheet entries and relationships before comparing, and still fails on any other
 package, worksheet or workbook change. An undeclared sheet is refused.
 
-They are hidden by default because Excel does not print hidden sheets, which
-keeps the exported form at one page. `--mapping-visible` prints them, and the
-tables can split across pages; review every page if you use it.
+They are visible by default for Excel-only delivery. --pdf hides them to keep
+native printing to the form; --mapping-visible keeps them visible in PDF mode.
+--hide-mapping explicitly hides them in Excel-only mode. Checks are embedded on
+Notes; fidelity.json is written only when --diagnostics is requested.
 
 Once a sheet is appended, the workbook is no longer byte-identical to the
-institutional original. Use this only when the reader asks for the mapping inside
-Excel.
+institutional original. The standard Excel deliverable includes these tabs by
+default; use --form-only when a strict form-only delivery is required.
 
 ## Test Item No. cells
 
@@ -60,14 +63,14 @@ can overflow its `Test Item No.` cell. Set `refs_max_chars` in the profile to th
 usable width (the bundled CJC profile uses 16). References are then abbreviated as
 `Q1-c1b +2`: as many as fit, plus the number omitted. No information is lost,
 because the full list appears in the allocation ledger, in the generated
-`Topic allocation` sheet's Refs column, and in `review.md`. Omit `refs_max_chars`
+`Topic allocation` sheet's Refs column. Omit `refs_max_chars`
 to print every reference in full.
 
 ## Formulas
 
 The deterministic evaluator supports cell/range references, cross-sheet references,
 arithmetic, comparisons, IF, SUM, AND and OR, covering the bundled template.
-Other formula caches are cleared and listed in `fidelity.json`, with native
+Other formula caches are cleared and listed on Notes, with native
 recalculation enabled. The formula XML remains intact. Formula evaluation has
 no Python `eval` or execution of worksheet content.
 
@@ -96,7 +99,8 @@ Review the native export page by page. In particular check:
 - Percent formatting and conditionally highlighted bands are correct.
 - Multi-page content is in order and tables do not leave isolated rows.
 
-Static formula/cache fidelity does not prove visual layout. `--render` writes
+Static formula/cache fidelity does not prove visual layout. Optional `--pdf --render` writes
 page PNGs through optional PyMuPDF and leaves `visual_review` pending. The agent
-must inspect those PNGs and add its review evidence to the report. On hosts
-without visual tools, disclose that review is still pending.
+must inspect those PNGs and record actual findings on Notes or in chat. No default
+Excel-only build claims that it performed a visual review. Use temporary previews
+only for new templates/layout concerns, then clean them after inspection.

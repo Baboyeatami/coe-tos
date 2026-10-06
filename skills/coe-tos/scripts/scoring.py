@@ -17,6 +17,18 @@ def number(value):
     return result
 
 
+def allocation_index(draft):
+    """Index a validated ledger once for all workbook tables and references."""
+    topics, criteria, references = defaultdict(list), defaultdict(list), defaultdict(set)
+    for entry in draft["allocations"]:
+        topics[entry["topic"]].append(entry)
+        criteria[(entry["question"], entry["criterion"])].append(entry)
+        for group in GROUPS:
+            if number(entry["scores"][group]) > 0:
+                references[(entry["topic"], group)].add(f"{entry['question']}-{entry['criterion']}")
+    return {"topics": topics, "criteria": criteria, "references": references}
+
+
 def validate(draft, profile):
     errors, warnings = [], []
     if draft.get("version") != 1:

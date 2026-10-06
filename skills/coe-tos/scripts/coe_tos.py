@@ -9,8 +9,7 @@ import tempfile
 import time
 from decimal import Decimal
 
-from export_pdf import export, preflight, render_pdf
-from scoring import GROUPS, validate
+from scoring import GROUPS, allocation_index, validate
 
 SKILL = Path(__file__).resolve().parents[1]
 ASSETS = SKILL / "assets"
@@ -152,7 +151,7 @@ def report(draft, result, profile=None, fidelity=None, pdf=None):
                   f"- {fidelity['formula_count']} original formulas retained; styles, merges, validations and protection preserved."]
         if fidelity.get("added_sheets"):
             lines += ["- The template's own worksheet changed only in declared values, formula caches and print settings.",
-                      f"- Supplementary worksheets added: {', '.join(fidelity['added_sheets'])}. They are hidden, so the PDF export contains the form only; unhide them in Excel to read them."]
+                      f"- Supplementary worksheets added: {', '.join(fidelity['added_sheets'])}. Visibility: {fidelity.get('supplementary_visibility', 'unspecified')}."]
         else:
             lines.append("- Explicit profile print-area/fit settings and calculation flags are the only non-value changes.")
         if fidelity["unsupported_formula_caches"]:
@@ -199,14 +198,19 @@ def main(argv=None):
                              help="JSON validation report for validate; output directory for build")
         if name == "build":
             command.add_argument("--template", type=Path, default=ASSETS / "cjc-template.xlsx")
-            command.add_argument("--xlsx-only", action="store_true")
+            delivery = command.add_mutually_exclusive_group()
+            delivery.add_argument("--xlsx-only", action="store_true", help="Compatibility alias for the default Excel-only delivery")
+            delivery.add_argument("--pdf", action="store_true", help="Explicitly request a native PDF in addition to TOS.xlsx")
+            command.add_argument("--diagnostics", action="store_true", help="Explicitly retain JSON, Markdown and CSV build reports")
+            command.add_argument("--form-only", action="store_true", help="Keep only the template's existing worksheets")
             command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
             command.add_argument("--render", action="store_true")
             command.add_argument("--render-scale", type=float, default=1.5)
             command.add_argument("--with-mapping", action="store_true",
-                                 help="Also add assessment mapping, topic allocation, ledger and notes sheets")
+                                 help="Compatibility alias: mapping sheets are included by default")
             command.add_argument("--mapping-visible", action="store_true",
-                                 help="Show the supplementary sheets instead of hiding them from the PDF export")
+                                 help="Keep mapping sheets visible even when --pdf is requested")
+            command.add_argument("--hide-mapping", action="store_true", help="Explicitly hide the supplementary sheets")
     command = commands.add_parser("export-pdf")
     command.add_argument("workbook", type=Path)
     command.add_argument("--out", required=True, type=Path)
@@ -255,15 +259,18 @@ def main(argv=None):
             write_json(args.out, inspect(args.template))
             return 0
         if args.command == "export-pdf":
+            from export_pdf import export
             info = export(args.workbook, args.out, args.backend, args.render, args.render_scale)
             write_json(args.out.with_suffix(".export.json"), info)
             print(args.out)
             return 0
         if args.command == "render-pdf":
+            from export_pdf import render_pdf
             info = render_pdf(args.pdf, args.scale)
             print(json.dumps(info, indent=2))
             return 0
         if args.command == "preview-template":
+            from export_pdf import export, preflight
             from workbooks import preview_workbook
             preflight(args.backend, args.render, args.render_scale)
             with tempfile.TemporaryDirectory(prefix="coe-tos-preview-") as directory:
@@ -280,43 +287,60 @@ def main(argv=None):
             write_json(args.out, result)
             print("FAILED" if result["errors"] else "PASSED", *result["errors"], sep="\n")
             return 1 if result["errors"] else 0
-        args.out.mkdir(parents=True, exist_ok=True)
-        write_json(args.out / "validation.json", result)
+        if args.render and not args.pdf:
+            raise ValueError("--render requires --pdf; the default build delivers only TOS.xlsx")
+        if args.form_only and (args.with_mapping or args.mapping_visible or args.hide_mapping):
+            raise ValueError("--form-only cannot be combined with mapping options")
+        if args.hide_mapping and args.mapping_visible:
+            raise ValueError("Choose only one of --hide-mapping and --mapping-visible")
         if result["errors"]:
-            (args.out / "review.md").write_text(report(draft, result, profile), encoding="utf-8")
+            if args.diagnostics:
+                write_json(args.out / "validation.json", result)
+                (args.out / "review.md").write_text(report(draft, result, profile), encoding="utf-8")
             raise ValueError("Invalid draft: " + "; ".join(result["errors"]))
-        if not args.xlsx_only:
+        if args.pdf:
+            from export_pdf import export, preflight
             preflight(args.backend, args.render, args.render_scale)
         from workbooks import build
         extra = None
-        if args.with_mapping:
+        index = allocation_index(draft)
+        if not args.form_only:
             from mapping import sheets
-            extra = sheets(draft, result)
+            extra = sheets(draft, result, profile, index)
+        hidden = args.hide_mapping or (args.pdf and not args.mapping_visible)
         fidelity = build(args.template, args.out / "TOS.xlsx", draft, profile, result,
-                         extra_sheets=extra, hidden_sheets=not args.mapping_visible)
-        write_json(args.out / "draft.json", draft)
-        write_json(args.out / "template-profile.json", profile)
-        write_json(args.out / "fidelity.json", fidelity)
+                         extra_sheets=extra, hidden_sheets=hidden, index=index)
         pdf = None
-        if not args.xlsx_only:
+        if args.pdf:
             try:
                 pdf = export(args.out / "TOS.xlsx", args.out / "TOS.pdf", args.backend, args.render, args.render_scale)
             except Exception as error:
                 pdf = {"error": str(error), "current_pdf_verified": False,
                        "warning": "Any pre-existing PDF in this output directory may be stale; do not deliver it."}
-            write_json(args.out / "pdf-checks.json", pdf)
-        (args.out / "review.md").write_text(report(draft, result, profile, fidelity, pdf), encoding="utf-8")
-        with (args.out / "mapping.csv").open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.writer(stream)
-            writer.writerow(["id", "question", "criterion", "subcriterion", "topic", "points", *GROUPS, "rationale"])
-            for a in draft["allocations"]:
-                writer.writerow([a["id"], a["question"], a["criterion"], a.get("subcriterion", ""), a["topic"], a["points"],
-                                 *(a["scores"][g] for g in GROUPS), a["rationale"]])
-        print("Created", args.out / "TOS.xlsx")
-        write_json(args.out / "timings.json", {"total_seconds": round(time.perf_counter() - started, 4),
+        timings = {"total_seconds": round(time.perf_counter() - started, 4),
                    "export_seconds": (pdf or {}).get("export_seconds"),
-                   "render_seconds": (pdf or {}).get("render_seconds")})
+                   "render_seconds": (pdf or {}).get("render_seconds")}
+        if args.diagnostics:
+            write_json(args.out / "validation.json", result)
+            write_json(args.out / "draft.json", draft)
+            write_json(args.out / "template-profile.json", profile)
+            write_json(args.out / "fidelity.json", fidelity)
+            if pdf:
+                write_json(args.out / "pdf-checks.json", pdf)
+            (args.out / "review.md").write_text(report(draft, result, profile, fidelity, pdf), encoding="utf-8")
+            with (args.out / "mapping.csv").open("w", newline="", encoding="utf-8") as stream:
+                writer = csv.writer(stream)
+                writer.writerow(["id", "question", "criterion", "subcriterion", "topic", "points", *GROUPS, "rationale"])
+                for a in draft["allocations"]:
+                    writer.writerow([a["id"], a["question"], a["criterion"], a.get("subcriterion", ""), a["topic"], a["points"],
+                                     *(a["scores"][g] for g in GROUPS), a["rationale"]])
+            write_json(args.out / "timings.json", timings)
+        print("Created", args.out / "TOS.xlsx")
+        print(f"Build: {timings['total_seconds']:.3f}s; formula/style fidelity passed")
         print("Cognitive totals:", " / ".join(str(result["cognitive"][g]) for g in GROUPS))
+        for group, compliant in result["bands"].items():
+            if not compliant:
+                print(f"Band conflict: {group} {result['shares'][group]:.2f}%")
         if pdf and pdf.get("error"):
             print("PDF incomplete:", pdf["error"], file=sys.stderr)
             return 1

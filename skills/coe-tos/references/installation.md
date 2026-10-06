@@ -39,6 +39,17 @@ For PDF export install Microsoft Excel on macOS or LibreOffice on macOS,
 Linux or Windows. Put `soffice` on PATH (Windows normally installs it under
 `C:\Program Files\LibreOffice\program`). XLSX generation does not require Office.
 
+Version 1.4 defaults to complete Excel-only delivery:
+
+```sh
+python scripts/coe_tos.py build --draft work/draft.json --out output
+```
+
+This writes only TOS.xlsx with visible mapping, ledger/evidence and Notes tabs.
+Office/PyMuPDF are not loaded by the default build. `--pdf` explicitly adds native
+PDF export; `--pdf --render` creates previews. `--diagnostics` explicitly keeps the
+external reports. `--xlsx-only` is a compatibility alias, not a partial delivery.
+
 Rendering dependencies are checked before opening Office. For PNG-only previews
 of an existing PDF, use `render-pdf` instead of running `build` again:
 
@@ -59,7 +70,7 @@ python scripts/coe_tos.py ingest-text --name exam-rubric.txt --stdin --out sourc
 
 It adds a warning that pasted text cannot be visually verified, and
 `draft.json` metadata `input_mode: chat-pasted` repeats that caution in
-`review.md`.
+the workbook's Notes tab (and `review.md` only with `--diagnostics`).
 
 Run rendering regression tests from the repository root:
 

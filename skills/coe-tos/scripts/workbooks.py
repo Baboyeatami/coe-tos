@@ -10,7 +10,7 @@ import openpyxl
 from openpyxl.utils import coordinate_to_tuple
 
 from formulas import evaluator
-from scoring import GROUPS, number
+from scoring import GROUPS, allocation_index, number
 
 NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -159,7 +159,8 @@ def fit_refs(refs, limit):
     return "; ".join(refs[:kept]) + f" +{len(refs) - kept}"
 
 
-def projected_values(draft, profile, result):
+def projected_values(draft, profile, result, index=None):
+    lookup = index or allocation_index(draft)
     values = field_values(draft, profile)
     columns = profile["columns"]
     for index in range(profile["last_row"] - profile["first_row"] + 1):
@@ -168,8 +169,7 @@ def projected_values(draft, profile, result):
         scores = result["topic_scores"][topic["id"]] if topic else None
         basic = {"number": index + 1 if topic else None, "topic": topic["title"] if topic else None}
         for group in GROUPS:
-            refs = sorted({f"{a['question']}-{a['criterion']}" for a in draft["allocations"]
-                           if topic and a["topic"] == topic["id"] and number(a["scores"][group]) > 0})
+            refs = sorted(lookup["references"].get((topic["id"], group), ())) if topic else []
             basic[group + "_refs"] = fit_refs(refs, profile.get("refs_max_chars")) if refs else ("--" if topic else None)
             basic[group] = scores[group] if scores else None
         for name, value in basic.items():
@@ -270,12 +270,13 @@ def normalized_sheet(data, edited, print_changes=False):
     return ET.tostring(root, method="c14n")
 
 
-def verify(template, output, profile, edited, added=None):
+def verify(template, output, profile, edited, added=None, original_parts=None):
     added = added or {"parts": [], "relationship_ids": [], "sheet_names": []}
     new_parts = set(added["parts"])
     relationship_ids = set(added["relationship_ids"])
     sheet_names = set(added["sheet_names"])
-    before, after = package(template), package(output)
+    before = original_parts if original_parts is not None else package(template)
+    after = package(output)
     if set(after) - set(before) != new_parts or set(before) - set(after):
         raise ValueError("Workbook package parts added or dropped")
     paths = sheet_paths(before)
@@ -335,19 +336,21 @@ def verify(template, output, profile, edited, added=None):
             "added_sheets": sorted(sheet_names), "added_parts": sorted(new_parts)}
 
 
-def build(template, output, draft, profile, result, extra_sheets=None, hidden_sheets=True):
+def build(template, output, draft, profile, result, extra_sheets=None, hidden_sheets=True, index=None):
     template, output = Path(template), Path(output)
     if template.suffix.lower() != ".xlsx" or output.suffix.lower() != ".xlsx":
         raise ValueError("Generation requires an XLSX template and XLSX output")
     if template.resolve() == output.resolve():
         raise ValueError("Output must not overwrite the template")
-    digest = hashlib.sha256(template.read_bytes()).hexdigest()
-    parts = package(template)
+    template_bytes = template.read_bytes()
+    digest = hashlib.sha256(template_bytes).hexdigest()
+    original_parts = package(BytesIO(template_bytes))
+    parts = dict(original_parts)
     paths = sheet_paths(parts)
     if profile["sheet"] not in paths:
         raise ValueError(f"Missing worksheet {profile['sheet']!r}")
-    values = projected_values(draft, profile, result)
-    wb = openpyxl.load_workbook(BytesIO(template.read_bytes()), data_only=False)
+    values = projected_values(draft, profile, result, index)
+    wb = openpyxl.load_workbook(BytesIO(template_bytes), data_only=False)
     sheet = wb[profile["sheet"]]
     for address, value in computed_values(draft, profile, result).items():
         if sheet[address].data_type != "f":
@@ -367,6 +370,7 @@ def build(template, output, draft, profile, result, extra_sheets=None, hidden_sh
     calculate = evaluator(wb)
     unsupported = []
     formula_count = 0
+    caches = {}
     for ws in wb:
         root = parse(parts[paths[ws.title]])
         for row in ws:
@@ -380,29 +384,65 @@ def build(template, output, draft, profile, result, extra_sheets=None, hidden_sh
                     unsupported.append(f"{ws.title}!{cell.coordinate}: {error}")
                     value = None
                 write_cache(cell_node(root, cell.coordinate), value)
+                if value is not None:
+                    caches[(ws.title, cell.coordinate)] = value
         parts[paths[ws.title]] = serialize(root)
     apply_print(parts, paths, profile)
     added = {"parts": [], "relationship_ids": [], "sheet_names": []}
     if extra_sheets:
         import mapping
-        added = mapping.attach(parts, extra_sheets, hidden=hidden_sheets)
+        checks = [
+            ["Check: template SHA-256", digest],
+            ["Check: original package parts", len(original_parts)],
+            ["Check: template preservation", "Original formulas, cell styles, drawings/media and relationships checked before publication; only declared values/caches/print settings and registered supplementary sheets may differ."],
+            ["Check: original formulas", formula_count],
+            ["Check: formula caches", f"{len(caches)} supported results read back before publication; {len(unsupported)} unsupported results."],
+            ["Check: unsupported formula caches", "\n".join(unsupported) if unsupported else "None"],
+            ["Check: supplementary visibility", "hidden" if hidden_sheets else "visible"],
+            ["Check: delivery", "Workbook is self-contained; source locators and rationales are on Allocation ledger. Notes contains metadata, assumptions and band findings."],
+        ]
+        specs = [(name, list(rows) + checks if name == "Notes" else rows, widths)
+                 for name, rows, widths in extra_sheets]
+        styles = mapping.template_styles(wb)
+        added = mapping.attach(parts, specs, hidden=hidden_sheets, styles=styles)
     output.parent.mkdir(parents=True, exist_ok=True)
     # A staged file is verified before publishing; failures cannot replace prior output.
     import tempfile
     with tempfile.TemporaryDirectory(prefix=".coe-tos-", dir=output.parent) as directory:
         staged = Path(directory) / output.name
-        with ZipFile(template) as source, ZipFile(staged, "w") as target:
-            for item in source.infolist():
+        with ZipFile(BytesIO(template_bytes)) as source, ZipFile(staged, "w") as target:
+            source_items = source.infolist()
+            source_names = {item.filename for item in source_items}
+            for item in source_items:
                 target.writestr(item, parts[item.filename])
             for name, payload in parts.items():
-                if name not in {item.filename for item in source.infolist()}:
+                if name not in source_names:
                     target.writestr(name, payload)
-        fidelity = verify(template, staged, profile, set(values), added)
+        fidelity = verify(template, staged, profile, set(values), added, original_parts)
+        cached = openpyxl.load_workbook(staged, data_only=True)
+        try:
+            for address, expected in values.items():
+                expected = float(expected) if hasattr(expected, "as_tuple") else expected
+                actual = cached[profile["sheet"]][address].value
+                matches = actual in (None, "") if expected in (None, "") else actual == expected
+                if not matches:
+                    raise ValueError(f"Input read-back differs: {address}")
+            for (sheet_name, address), expected in caches.items():
+                actual = cached[sheet_name][address].value
+                if (actual if actual is not None else "") != expected:
+                    raise ValueError(f"Formula cache read-back differs: {sheet_name}!{address}")
+            for ws in cached:
+                if any(cell.data_type == "e" for row in ws for cell in row):
+                    raise ValueError(f"Workbook contains Excel error cells: {ws.title}")
+        finally:
+            cached.close()
         if hashlib.sha256(template.read_bytes()).hexdigest() != digest:
             raise ValueError("Source template changed during build")
         staged.replace(output)
     fidelity.update(template_sha256=digest, formula_count=formula_count,
-                    unsupported_formula_caches=unsupported)
+                    unsupported_formula_caches=unsupported,
+                    formula_caches_verified=len(caches),
+                    supplementary_visibility="hidden" if hidden_sheets else "visible")
     return fidelity
 
 

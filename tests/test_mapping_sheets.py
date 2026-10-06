@@ -36,18 +36,18 @@ class SupplementarySheetTests(unittest.TestCase):
     def build(self, name, *flags):
         out = self.directory / name
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            status = main(["build", "--draft", str(EXAMPLE), "--out", str(out), "--xlsx-only", *flags])
+            status = main(["build", "--draft", str(EXAMPLE), "--out", str(out), "--xlsx-only", "--diagnostics", *flags])
         self.assertEqual(status, 0)
         return out
 
     def test_default_build_adds_no_sheet(self):
-        out = self.build("plain")
+        out = self.build("plain", "--form-only")
         workbook = openpyxl.load_workbook(out / "TOS.xlsx")
         self.assertEqual(workbook.sheetnames, ["Table of Specifications"])
         self.assertEqual(json.loads((out / "fidelity.json").read_text())["added_sheets"], [])
 
     def test_with_mapping_adds_hidden_sheets_that_reconcile(self):
-        out = self.build("mapped", "--with-mapping")
+        out = self.build("mapped", "--with-mapping", "--hide-mapping")
         workbook = openpyxl.load_workbook(out / "TOS.xlsx", data_only=True)
         self.assertEqual(workbook.sheetnames,
                          ["Table of Specifications", "Assessment mapping", "Topic allocation",

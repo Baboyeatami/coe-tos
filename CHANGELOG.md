@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.5.0
+
+- Add `excel-windows` native PDF export through desktop Excel COM automation and
+  optional pywin32. `auto` prefers Excel on Windows/macOS, then LibreOffice.
+- Run Windows Office in an isolated worker with a 180-second watchdog, new-instance
+  ownership, and PID/creation-time-verified cleanup. Original workbooks and legacy
+  sources are preserved; export respects print areas and sheet visibility.
+- Add native Windows Word `.doc` and Excel `.xls` input conversion, with accurate
+  converter provenance. `extract --office-backend` selects `auto`, `ms-office`, or
+  `libreoffice`; selected-engine failures do not silently switch converters.
+- Discover LibreOffice in standard Windows Program Files locations, and support
+  `COE_TOS_SOFFICE` for explicit executable paths. Keep Office discovery separate
+  from LibreOffice CLI calls; default workbook generation does not discover Office.
+- Include optional Windows requirements, PowerShell installation/upgrade guidance,
+  cross-platform regression tests, and opt-in native Office checks. Real Windows
+  Office tests are skipped by default and require a desktop with Word and Excel.
+
 ## 1.4.0
 
 - Default builds deliver only TOS.xlsx, with visible assessment mapping, topic

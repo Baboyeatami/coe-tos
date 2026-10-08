@@ -219,7 +219,8 @@ class WorkflowTests(unittest.TestCase):
         subprocess.run([sys.executable, str(ROOT / "scripts/package_skill.py"), "--out", str(archive)], check=True, capture_output=True)
         with ZipFile(archive) as package_zip:
             self.assertIsNone(package_zip.testzip())
-            for name in ("SKILL.md", "LICENSE", "assets/cjc-template.xlsx", "scripts/coe_tos.py", "scripts/requirements.txt"):
+            for name in ("SKILL.md", "LICENSE", "assets/cjc-template.xlsx", "scripts/coe_tos.py", "scripts/requirements.txt",
+                         "scripts/office.py", "scripts/windows_office.py", "scripts/requirements-windows-office.txt"):
                 self.assertIn("coe-tos/" + name, package_zip.namelist())
         target = self.directory / "installed/coe-tos"
         command = [sys.executable, str(ROOT / "scripts/install.py"), "--harness", "generic", "--destination", str(target)]

@@ -34,7 +34,9 @@ class ExcelDeliveryTests(unittest.TestCase):
 
     def test_default_build_writes_only_one_workbook_without_office(self):
         with patch("export_pdf.export", side_effect=AssertionError("Office must not run")) as export, \
-                patch("export_pdf.preflight", side_effect=AssertionError("Office preflight must not run")) as preflight:
+                patch("export_pdf.preflight", side_effect=AssertionError("Office preflight must not run")) as preflight, \
+                patch("office.windows_office_error", side_effect=AssertionError("COM discovery must not run")), \
+                patch("windows_office.run_office", side_effect=AssertionError("COM worker must not run")):
             self.assertEqual(self.build(), 0)
             export.assert_not_called()
             preflight.assert_not_called()

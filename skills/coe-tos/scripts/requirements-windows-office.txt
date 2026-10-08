@@ -1,0 +1,2 @@
+# Optional Windows desktop Excel/Word automation; core XLSX delivery needs neither.
+pywin32>=306; sys_platform == "win32"

@@ -10,6 +10,7 @@ import time
 from decimal import Decimal
 
 from scoring import GROUPS, allocation_index, validate
+from office import INPUT_BACKENDS, PDF_BACKENDS
 
 SKILL = Path(__file__).resolve().parents[1]
 ASSETS = SKILL / "assets"
@@ -181,6 +182,8 @@ def main(argv=None):
     command.add_argument("inputs", nargs="+", type=Path)
     command.add_argument("--out", required=True, type=Path)
     command.add_argument("--ocr", action="store_true")
+    command.add_argument("--office-backend", choices=INPUT_BACKENDS, default="auto",
+                         help="Legacy input conversion: Windows desktop Word/Excel or LibreOffice")
     command = commands.add_parser("ingest-text", help="Add text supplied in chat to a sources JSON report")
     command.add_argument("--name", required=True, help="Label recorded as the source, for example exam-rubric.txt")
     command.add_argument("--stdin", action="store_true", help="Read the supplied text from standard input")
@@ -203,7 +206,7 @@ def main(argv=None):
             delivery.add_argument("--pdf", action="store_true", help="Explicitly request a native PDF in addition to TOS.xlsx")
             command.add_argument("--diagnostics", action="store_true", help="Explicitly retain JSON, Markdown and CSV build reports")
             command.add_argument("--form-only", action="store_true", help="Keep only the template's existing worksheets")
-            command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
+            command.add_argument("--backend", choices=PDF_BACKENDS, default="auto")
             command.add_argument("--render", action="store_true")
             command.add_argument("--render-scale", type=float, default=1.5)
             command.add_argument("--with-mapping", action="store_true",
@@ -214,7 +217,7 @@ def main(argv=None):
     command = commands.add_parser("export-pdf")
     command.add_argument("workbook", type=Path)
     command.add_argument("--out", required=True, type=Path)
-    command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
+    command.add_argument("--backend", choices=PDF_BACKENDS, default="auto")
     command.add_argument("--render", action="store_true")
     command.add_argument("--render-scale", type=float, default=1.5)
     command = commands.add_parser("render-pdf", help="Render existing PDF page images without rebuilding or opening Office")
@@ -224,7 +227,7 @@ def main(argv=None):
     command.add_argument("--template", type=Path, default=ASSETS / "cjc-template.xlsx")
     command.add_argument("--profile", type=Path, default=ASSETS / "cjc-profile.json")
     command.add_argument("--out", required=True, type=Path)
-    command.add_argument("--backend", choices=["auto", "excel-mac", "libreoffice"], default="auto")
+    command.add_argument("--backend", choices=PDF_BACKENDS, default="auto")
     command.add_argument("--render", action="store_true")
     command.add_argument("--render-scale", type=float, default=1.5)
     args = parser.parse_args(argv)
@@ -235,7 +238,7 @@ def main(argv=None):
             failed = False
             for path in args.inputs:
                 try:
-                    documents.append(extract(path, ocr=args.ocr))
+                    documents.append(extract(path, ocr=args.ocr, office_backend=args.office_backend))
                 except Exception as error:
                     failed = True
                     documents.append({"source": path.name, "error": str(error), "segments": []})

@@ -9,12 +9,7 @@ from docx import Document
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 from pypdf import PdfReader
-
-
-def office_binary():
-    candidates = [shutil.which("soffice"), shutil.which("libreoffice"),
-                  "/Applications/LibreOffice.app/Contents/MacOS/soffice"]
-    return next((p for p in candidates if p and Path(p).is_file()), None)
+from office import input_backend, office_binary
 
 
 def convert_office(source, extension, destination):
@@ -46,7 +41,7 @@ def text_document(text, name, warnings=None):
     return result
 
 
-def extract(path, ocr=False):
+def extract(path, ocr=False, office_backend="auto"):
     path = Path(path).resolve()
     if not path.is_file():
         raise ValueError(f"Input is not a file: {path}")
@@ -61,11 +56,21 @@ def extract(path, ocr=False):
     suffix = path.suffix.lower()
     if suffix in (".doc", ".xls", ".odt", ".ods", ".rtf"):
         extension = "xlsx" if suffix in (".xls", ".ods") else "docx"
+        backend = input_backend(suffix, office_backend)
         with tempfile.TemporaryDirectory(prefix="coe-tos-input-") as directory:
-            converted = convert_office(path, extension, directory)
-            child = extract(converted, ocr=ocr)
+            if backend == "libreoffice":
+                converted = convert_office(path, extension, directory)
+                converter = "LibreOffice"
+            else:
+                from windows_office import run_office
+                # Converters see copies of legacy inputs as well as output workbooks.
+                copied = Path(directory) / ("input" + suffix)
+                shutil.copy2(path, copied)
+                converted = run_office(extension, copied, Path(directory) / ("converted." + extension))
+                converter = "Microsoft " + ("Word" if backend == "word-windows" else "Excel")
+            child = extract(converted, ocr=ocr, office_backend=office_backend)
             result.update(segments=child["segments"], warnings=child["warnings"])
-        result["warnings"].append("Converted through LibreOffice; locators refer to converted content.")
+        result["warnings"].append(f"Converted through {converter}; locators refer to converted content.")
     elif suffix == ".pdf":
         if ocr:
             binary = shutil.which("ocrmypdf")

@@ -3,7 +3,12 @@
 Create an evidence-led College of Engineering Table of Specifications from exams,
 rubrics, syllabi, supplied documents or text pasted in chat.
 
-By **Engr. Jamie Eduardo Rosal, MSCpE**. Current skill version: **1.4.0**.
+By **Engr. Jamie Eduardo Rosal, MSCpE**. Current skill version: **1.5.0**.
+
+**Already installed an older version?** Check yours, then follow
+[Updating an existing installation](#updating-an-existing-installation).
+The [1.0.x migration notes](#updating-from-10x) explain changed output defaults;
+[1.5.0 adds Windows desktop Excel and Word support](#updating-from-14x).
 
 **The default deliverable is one file: `TOS.xlsx`.** Assessment mapping, topic
 allocation, evidence, rationales, metadata, assumptions and checks are inside it.
@@ -62,9 +67,55 @@ python -m pip install -r skills/coe-tos/scripts/requirements.txt
 Tell the agent to use that environment's Python interpreter. Excel-only delivery
 does not require Microsoft Excel, LibreOffice or PyMuPDF. Optional tools are:
 
-- Microsoft Excel on macOS or LibreOffice for requested native PDF export.
+- Desktop Microsoft Excel on Windows or macOS for requested native PDF export;
+  LibreOffice is the fallback. Windows also needs the optional pywin32 dependency.
+- Desktop Microsoft Word/Excel on Windows for legacy `.doc`/`.xls` input conversion.
 - PyMuPDF for source/layout PNG previews: `python -m pip install pymupdf`.
 - OCRmyPDF/Tesseract for scanned inputs, or the host's vision tools.
+
+### Windows with Microsoft Office
+
+From the repository root, use the virtual environment's interpreter directly in
+PowerShell (activation is optional):
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r skills/coe-tos/scripts/requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r skills/coe-tos/scripts/requirements-windows-office.txt
+.\.venv\Scripts\python.exe scripts/install.py --harness opencode --force
+```
+
+Tell the agent to use `.venv\Scripts\python.exe`. Desktop Excel/Word must be
+installed and registered for automation; browser-only Microsoft 365 does not
+provide COM automation. The optional dependency is needed for Office operations,
+while default `TOS.xlsx` generation works with the core requirements alone.
+
+PDF `--backend auto` prefers Excel on Windows and macOS; Linux uses LibreOffice.
+The explicit choices are `excel-windows`, `excel-mac`, and `libreoffice`:
+
+```powershell
+.\.venv\Scripts\python.exe skills/coe-tos/scripts/coe_tos.py build --draft examples/draft.json --out output
+.\.venv\Scripts\python.exe skills/coe-tos/scripts/coe_tos.py export-pdf output/TOS.xlsx --out work/preview.pdf --backend excel-windows
+```
+
+Legacy `.doc` and `.xls` extraction automatically prefers Windows Word and Excel,
+respectively. Use `extract ... --office-backend ms-office` to require that engine,
+or `--office-backend libreoffice` to select LibreOffice explicitly. `.odt`, `.ods`
+and `.rtf` conversion uses LibreOffice. Modern PDF/DOCX/XLSX inputs use native
+Python readers. An export/conversion error is reported without silently switching
+engines.
+
+LibreOffice discovery checks `PATH` and standard Windows Program Files locations.
+An explicit override is available for custom installations:
+
+```powershell
+$env:COE_TOS_SOFFICE = 'C:\Program Files\LibreOffice\program\soffice.exe'
+```
+
+Windows Office runs in a supervised worker with a 180-second timeout, using copies
+of input files and a newly created Office instance. Cleanup checks the recorded
+process ID and creation time. If Excel/Word reuses an existing process, the worker
+refuses to operate on it. See [installation and troubleshooting](skills/coe-tos/references/installation.md).
 
 ### Ask the agent
 
@@ -123,7 +174,98 @@ The output folder contains only **TOS.xlsx** on a fresh default build. The build
 does not automatically delete existing files in a reused folder. All tabs are
 visible for Excel-only delivery; no unhide step is needed.
 
-### Upgrading from 1.3.x
+## Updating an existing installation
+
+Check which version you are running before anything else. The version is the
+`version` field in the frontmatter of the installed `SKILL.md`:
+
+```sh
+grep -m1 'version:' ~/.config/opencode/skills/coe-tos/SKILL.md   # OpenCode
+grep -m1 'version:' ~/.agents/skills/coe-tos/SKILL.md           # Codex
+grep -m1 'version:' ~/.claude/skills/coe-tos/SKILL.md           # Claude Code
+```
+
+Windows PowerShell, for an OpenCode user installation:
+
+```powershell
+Select-String -Path "$HOME\.config\opencode\skills\coe-tos\SKILL.md" -Pattern '^\s*version:'
+```
+
+Update older installations to **1.5.0** for the current delivery workflow and
+Windows Office support. From your repository checkout:
+
+```sh
+git clone https://github.com/Baboyeatami/coe-tos.git   # first time only
+cd coe-tos
+git pull --ff-only                                     # existing checkout
+python scripts/install.py --harness opencode --force    # see the harness table
+```
+
+`--force` is required whenever the destination already exists; the installer
+refuses to overwrite a folder that has no `SKILL.md`, and refuses a symlinked
+destination rather than replacing it. Inspect the target folder first if you
+stored local edits there — `--force` deletes it and reinstalls from the repository.
+Use `--scope project --project /path/to/project` for a project-scoped install, or
+`--harness generic --destination /path/to/skills/coe-tos` for another host.
+
+From a release archive instead of a checkout, unpack the new version over a copy
+of the same skill folder, keeping `scripts/`, `references/`, `assets/`, `LICENSE`
+and `SKILL.md` together, then restart the host. Replacing only `SKILL.md` leaves
+an older script set in place and will fail.
+
+Restart OpenCode, or reload the host, after upgrading. A running session keeps the
+old instructions in memory. The core dependency list is unchanged since 1.0.0;
+install the optional Windows Office requirements into the interpreter used by
+your agent if you want native Excel/Word automation:
+
+```powershell
+python -m pip install -r skills/coe-tos/scripts/requirements-windows-office.txt
+```
+
+### Updating from 1.0.x
+
+Your existing `draft.json` files, custom `--profile` JSON and institution
+templates keep working. The draft schema only gained optional fields (`title`,
+question `title`, and the `input_mode` / `sources` / `totals_confirmed_by` /
+`totals_confirmed_on` provenance metadata), and `scoring.py` gained checks without
+changing any rule. The bundled `examples/draft.json` is byte-identical to 1.0.0
+and still builds to 16 / 24 / 60. Existing valid drafts need no schema migration.
+The behavioural differences that affect work you already did:
+
+| | 1.0.x behaviour | Current behaviour |
+|:--|:--|:--|
+| Default `build` output | Workbook, PDF and external reports; PNGs when `--render` was requested | **`TOS.xlsx` only**; evidence and checks are inside it as visible tabs |
+| PDF export | Attempted by default; without a renderer it exited nonzero | Opt-in via `--pdf`, so a normal build never launches Office |
+| `build … --render` | The documented command | **Rejected** — `--render` now requires `--pdf` |
+| `--xlsx-only` | Skipped PDF export on a machine with no renderer | Compatibility alias for the new default |
+| Supplementary tabs | Did not exist (1.0.0) | Present and visible without `--with-mapping` |
+| Working files | Often written into `output/` | Keep them in a temporary work folder outside the delivery folder |
+
+So, concretely:
+
+- Re-run the 1.0 command **with `--pdf`** if you want the PDF and PNGs back:
+  `--render` on its own now exits with an error.
+- Re-run with `--diagnostics` if your process or review relied on `review.md`,
+  `mapping.csv` and the other external reports. Do not expect them by default.
+- Use `--form-only` for a strict institutional form, or `--hide-mapping` to keep the
+  supplementary tabs out of sight while retaining them.
+- Keep `draft.json`, `sources.json` and `template-inspection.json` in a work folder,
+  not in the folder you deliver. The builder does not delete files it did not create,
+  so old `review.md` / `fidelity.json` files from a 1.0 run will otherwise sit next to
+  the new `TOS.xlsx` and look current.
+
+Two corrections arrive with the upgrade. A topic mapping to several criteria used to
+wrap and clip in the fixed-height Test Item No. cell; cells now abbreviate as
+`Q1-c1b +2` and the full list stays in the Topic allocation Refs column and the
+Allocation ledger. A supplementary-sheet row supplied as a bare string produced a
+workbook that Excel and openpyxl could not open; rows are now normalised. Rebuild
+affected outputs with clipped references or unreadable 1.3.0 supplementary sheets.
+
+If you previously asked for "the XLSX, PDF and review report", ask for
+"only `TOS.xlsx`, with the mapping, evidence and notes in visible tabs" to get the
+current default.
+
+### Updating from 1.3.x
 
 The output defaults changed in 1.4.0:
 
@@ -136,16 +278,17 @@ The output defaults changed in 1.4.0:
 - Use `--form-only` when the delivered workbook must contain only the institutional
   form. Use `--hide-mapping` if you want the supplementary tabs hidden.
 
-To upgrade an existing OpenCode installation from an inspected repository checkout:
+Install with the same command as above (`git pull --ff-only`, then
+`python scripts/install.py --harness opencode --force`) and restart OpenCode.
 
-```sh
-git pull --ff-only
-python scripts/install.py --harness opencode --force
-```
+### Updating from 1.4.x
 
-Restart OpenCode to reload the new skill instructions.
+Version 1.5.0 adds `--backend excel-windows` and Windows native `.doc`/`.xls`
+conversion. Install `requirements-windows-office.txt` in your existing environment,
+then reinstall the entire skill folder with `--force` and restart the host. The
+one-file Excel default, draft format and assessment mapping are retained.
 
-### Generation time
+## Generation time
 
 Excel-only generation avoids native Office export, which was the main measured
 build cost. The builder also reuses template bytes and a shared allocation index,
@@ -232,9 +375,24 @@ python scripts/package_skill.py --out dist/coe-tos.zip
 
 Tests cover extraction, scoring/subcriteria, template fidelity, formula caches,
 chat ingestion, mapping sheets, render caching and single-file Excel delivery.
-The Excel-only build is tested without invoking Office. Optional PDF smoke tests
-need an installed renderer. GitHub Actions tests Python 3.10/3.12 on Windows,
-Linux and macOS; PyMuPDF-specific tests are skipped if the optional package is absent.
+The Excel-only build is tested without invoking Office. Cross-platform tests cover
+backend selection, COM method contracts, process ownership, failures, and a real
+subprocess watchdog using a non-Office fixture. GitHub Actions tests Python
+3.10/3.12 on Windows, Linux and macOS; PyMuPDF-specific tests are skipped if the
+optional package is absent.
+
+Real Windows Office tests are **opt-in**, and require desktop Excel and Word:
+
+```powershell
+$env:COE_TOS_RUN_OFFICE_TESTS = '1'
+python -m unittest discover -s tests -p 'test_windows_office.py' -v
+Remove-Item Env:COE_TOS_RUN_OFFICE_TESTS
+```
+
+These check form-only and mapping-visible PDF export, preservation of an unrelated
+open workbook, and `.doc`/`.xls` conversion. They remain skipped in ordinary CI;
+mocked tests do not establish real Windows Office compatibility. Inspect native
+PDF pages for layout, which can vary with fonts and printer settings.
 
 ## License
 

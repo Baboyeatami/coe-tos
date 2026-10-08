@@ -30,7 +30,8 @@ def validate_skill():
     for filename in re.findall(r"\]\(([^)#]+)(?:#[^)]*)?\)", text):
         if not filename.startswith("http") and not (SKILL / filename).exists():
             raise ValueError(f"Missing referenced resource: {filename}")
-    for required in ("assets/cjc-template.xlsx", "assets/cjc-profile.json", "scripts/coe_tos.py", "scripts/requirements.txt"):
+    for required in ("assets/cjc-template.xlsx", "assets/cjc-profile.json", "scripts/coe_tos.py", "scripts/requirements.txt",
+                     "scripts/office.py", "scripts/windows_office.py", "scripts/requirements-windows-office.txt"):
         if not (SKILL / required).is_file():
             raise ValueError(f"Missing resource: {required}")
 

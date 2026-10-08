@@ -35,9 +35,60 @@ correct interpreter command. The host must use that environment/interpreter
 when it runs scripts. Optional: `pip install pymupdf` for page PNGs, OCRmyPDF
 plus its documented system dependencies for scanned PDFs, Tesseract for images.
 
-For PDF export install Microsoft Excel on macOS or LibreOffice on macOS,
-Linux or Windows. Put `soffice` on PATH (Windows normally installs it under
-`C:\Program Files\LibreOffice\program`). XLSX generation does not require Office.
+## Microsoft Office on Windows
+
+Install desktop Excel for native PDF export and desktop Word for legacy `.doc`
+conversion. Browser-only Microsoft 365 does not provide local COM automation.
+From the repository root, PowerShell can use the environment directly:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r skills/coe-tos/scripts/requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r skills/coe-tos/scripts/requirements-windows-office.txt
+.\.venv\Scripts\python.exe scripts/install.py --harness opencode --force
+```
+
+For an already-installed skill, use its actual path to each requirements file.
+The agent must run this environment's interpreter. Core XLSX delivery needs no
+Office installation or pywin32.
+
+| Operation | Windows | macOS | Linux |
+|:--|:--|:--|:--|
+| Default `TOS.xlsx` build | Native Python tools | Native Python tools | Native Python tools |
+| Native PDF | Desktop Excel + pywin32; LibreOffice fallback | Desktop Excel via AppleScript; LibreOffice fallback | LibreOffice |
+| Legacy `.doc` / `.xls` extraction | Word / Excel + pywin32; LibreOffice fallback | LibreOffice or manually save as DOCX/XLSX | LibreOffice |
+| `.odt` / `.ods` / `.rtf` extraction | LibreOffice | LibreOffice | LibreOffice |
+
+PDF backend choices are `auto`, `excel-windows`, `excel-mac`, and `libreoffice`,
+accepted by `build`, `export-pdf`, and `preview-template`. `auto` prefers an
+available native Excel backend; explicit choices fail if unavailable. Excel is
+detected by COM registration on Windows, without starting it during preflight.
+An operation that fails after selecting an engine is reported without trying
+another engine silently.
+
+```powershell
+.\.venv\Scripts\python.exe skills/coe-tos/scripts/coe_tos.py export-pdf output/TOS.xlsx --out work/preview.pdf --backend excel-windows
+.\.venv\Scripts\python.exe skills/coe-tos/scripts/coe_tos.py extract exam.doc rubric.xls --office-backend ms-office --out work/sources.json
+```
+
+`extract --office-backend auto` prefers Word for `.doc` and Excel for `.xls` on
+Windows. `--office-backend libreoffice` explicitly selects LibreOffice. Source
+warnings name the converter and disclose that locators refer to converted content.
+
+## LibreOffice discovery
+
+The scripts check `COE_TOS_SOFFICE`, then `soffice`/`libreoffice` on PATH. Windows
+also checks `ProgramW6432`, `ProgramFiles`, and `ProgramFiles(x86)` under
+`LibreOffice\program\soffice.exe`; macOS checks the standard application bundle.
+For a custom installation, point the override at the executable:
+
+```powershell
+$env:COE_TOS_SOFFICE = 'C:\Program Files\LibreOffice\program\soffice.exe'
+```
+
+An invalid explicit override produces an error, rather than being ignored.
+
+## Delivery and previews
 
 Version 1.4 defaults to complete Excel-only delivery:
 
@@ -80,8 +131,38 @@ python -m unittest discover -s tests -p 'test_export_pdf.py' -v
 
 Render-specific tests use PyMuPDF when installed and are skipped otherwise. They
 cover changed PDFs, corrupt cached PNGs, scale changes, dependency failures before
-Office launch, and Excel error reporting/ownership. Native export still needs a
-smoke test on a host with Office installed.
+Office launch, and Excel error reporting/ownership. The full suite also covers
+Windows backend selection, COM method contracts, PID/creation-time cleanup, and
+a subprocess timeout fixture without starting Office.
+
+Real Windows Office tests require an explicit opt-in on a desktop with Excel and
+Word installed. They check form-only/mapping-visible PDFs, an unrelated workbook
+remaining open, and legacy Word/Excel conversion:
+
+```powershell
+$env:COE_TOS_RUN_OFFICE_TESTS = '1'
+python -m unittest discover -s tests -p 'test_windows_office.py' -v
+Remove-Item Env:COE_TOS_RUN_OFFICE_TESTS
+```
+
+These native tests are skipped by default, including hosted CI. Passing mocked
+tests is not a claim that a real Windows Office export or visual review occurred.
+
+## Windows troubleshooting
+
+- **pywin32 missing:** install the optional requirements with the same Python
+  interpreter used by the agent; installing into another Python does not help.
+- **Excel/Word not registered:** open the desktop application manually once to
+  finish first-run/licensing setup. Repair the Office installation if its COM
+  registration remains unavailable.
+- **Timeout:** the parent bounds each native operation at 180 seconds. It cleans
+  up only the new process identified by PID and creation time. If the worker was
+  blocked before recording ownership, it reports that cleanup is unverified;
+  inspect Office manually. Existing user instances are never globally terminated.
+- **Existing process reused:** the worker refuses to automate/quit that instance.
+  Resolve the Office registration/startup issue or explicitly select LibreOffice.
+- **Different layout:** fonts, printer metrics and native rendering can differ
+  between platforms. Inspect the PDF pages; equal scores do not prove equal layout.
 
 Restart OpenCode after installing. Codex discovers skills automatically;
 restart if missing. Claude Code supports reload/restart when discovery fails.

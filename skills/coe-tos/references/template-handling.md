@@ -76,10 +76,18 @@ no Python `eval` or execution of worksheet content.
 
 ## Print and visual checks
 
+`excel-windows` uses desktop Excel COM automation through optional pywin32, in a
+supervised worker with a 180-second timeout. It opens a temporary copy read-only,
+disables link updates, recalculates, and exports with the existing print areas and
+sheet visibility. The worker owns a new Office instance; timeout cleanup verifies
+both its process ID and creation time, and leaves unrelated user instances alone.
+
 `excel-mac` drives an installed Microsoft Excel through AppleScript on a temporary
 copy and closes only the workbook it opened. macOS may request automation
 permission. `libreoffice` uses an isolated temporary user profile and native Calc
-PDF export. Neither renderer saves back over the verified workbook.
+PDF export. No renderer saves back over the verified workbook. `auto` prefers
+Excel on Windows/macOS and otherwise uses LibreOffice; a selected engine's failure
+is reported without silently trying another engine.
 
 The supplied CJC template keeps its original page size/orientation. The profile
 sets A1:M31 to include the banner and fits the form to one page. Other templates

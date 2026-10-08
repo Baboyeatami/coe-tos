@@ -11,6 +11,7 @@ import time
 import uuid
 
 from pypdf import PdfReader
+from office import PDF_BACKENDS, windows_office_error
 
 
 def renderer():
@@ -35,7 +36,7 @@ def render_pdf(source, scale=1.5):
     directory.mkdir(exist_ok=True)
     manifest = directory / f"render-{key}.json"
     try:
-        cached = json.loads(manifest.read_text())
+        cached = json.loads(manifest.read_text(encoding="utf-8"))
         if (cached["pdf_sha256"] == digest and cached["scale"] == scale
                 and cached["renderer_version"] == version and cached["renders"]
                 and len(cached["renders"]) == len(cached["image_sha256"])
@@ -60,7 +61,7 @@ def render_pdf(source, scale=1.5):
             "renders": renders, "image_sha256": hashes, "pages": len(renders),
             "cache_hit": False, "visual_review": "pending",
             "render_seconds": round(time.perf_counter() - started, 4)}
-    manifest.write_text(json.dumps(info, indent=2) + "\n")
+    manifest.write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
     return info
 
 
@@ -73,13 +74,20 @@ def preflight(backend="auto", render=False, scale=1.5):
         renderer()
     excel = platform.system() == "Darwin" and Path("/Applications/Microsoft Excel.app").exists()
     if backend == "auto":
-        backend = "excel-mac" if excel else "libreoffice"
-    if backend not in ("excel-mac", "libreoffice"):
+        backend = ("excel-windows" if not windows_office_error("Excel") else
+                   "excel-mac" if excel else "libreoffice")
+    if backend not in PDF_BACKENDS[1:]:
         raise ValueError(f"Unknown PDF backend: {backend}")
+    if backend == "excel-windows":
+        error = windows_office_error("Excel")
+        if error:
+            raise ValueError(error)
     if backend == "excel-mac" and not excel:
         raise ValueError("excel-mac needs Microsoft Excel on macOS")
     if backend == "libreoffice" and not office_binary():
-        raise ValueError("PDF export needs Excel on macOS or LibreOffice. Install a backend or explicitly request --xlsx-only.")
+        details = windows_office_error("Excel") if platform.system() == "Windows" else ""
+        raise ValueError("PDF export needs desktop Excel on Windows (with pywin32) or macOS, "
+                         "or LibreOffice. Omit --pdf for Excel-only delivery. " + details)
     return backend
 
 
@@ -96,7 +104,10 @@ def export(source, output, backend="auto", render=False, scale=1.5):
         copied = temporary / f"tos-{uuid.uuid4().hex}.xlsx"
         shutil.copy2(source, copied)
         generated = temporary / "form.pdf"
-        if backend == "excel-mac":
+        if backend == "excel-windows":
+            from windows_office import run_office
+            run_office("pdf", copied, generated)
+        elif backend == "excel-mac":
             script = f'''
 tell application "Microsoft Excel"
     open (POSIX file {json.dumps(str(copied))})
